@@ -24,7 +24,9 @@ export default function SignInForm() {
 				{
 					onSuccess: () => {
 						toast.success("Bienvenido");
-						navigate({ to: "/dashboard" });
+						// Va a "/" para que el redirect por rol decida (operario → menú,
+						// admin → resultados). Ver routes/index.tsx.
+						navigate({ to: "/" });
 					},
 					onError: (error) => {
 						toast.error(error.error.message || "No se pudo iniciar sesión");

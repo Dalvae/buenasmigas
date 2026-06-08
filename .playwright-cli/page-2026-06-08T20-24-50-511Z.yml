@@ -1,0 +1,45 @@
+- generic [ref=e2]:
+  - generic [ref=e17]:
+    - banner [ref=e18]:
+      - generic [ref=e19]:
+        - link "Buenas Migas" [ref=e20] [cursor=pointer]:
+          - /url: /dashboard
+        - navigation [ref=e21]:
+          - link "Inicio" [ref=e22] [cursor=pointer]:
+            - /url: /dashboard
+          - link "Consultas" [ref=e23] [cursor=pointer]:
+            - /url: /consultas
+          - link "Admin" [ref=e24] [cursor=pointer]:
+            - /url: /admin
+      - generic [ref=e25]:
+        - generic [ref=e26]: Administrador
+        - button "Salir" [ref=e27]
+    - main [ref=e28]:
+      - generic [ref=e29]:
+        - heading "Registro de Datos de Producción" [level=1] [ref=e30]
+        - generic [ref=e31]:
+          - link "Ingreso Producción Elaboración" [ref=e32] [cursor=pointer]:
+            - /url: /elaboracion
+            - generic [ref=e33]:
+              - img [ref=e35]
+              - generic [ref=e44]: Ingreso Producción Elaboración
+          - link "Ingreso Producción Envasado" [ref=e45] [cursor=pointer]:
+            - /url: /envasado
+            - generic [ref=e46]:
+              - img [ref=e48]
+              - generic [ref=e52]: Ingreso Producción Envasado
+          - link "Ingreso Producto No Conforme" [ref=e53] [cursor=pointer]:
+            - /url: /pnc
+            - generic [ref=e54]:
+              - img [ref=e56]
+              - generic [ref=e58]: Ingreso Producto No Conforme
+          - link "Ver resultados de Producción" [ref=e59] [cursor=pointer]:
+            - /url: /consultas
+            - generic [ref=e60]:
+              - img [ref=e62]
+              - generic [ref=e64]: Ver resultados de Producción
+  - region "Notifications alt+T":
+    - list:
+      - listitem [ref=e65]:
+        - img [ref=e67]
+        - generic [ref=e71]: Bienvenido

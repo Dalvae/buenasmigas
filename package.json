@@ -1,0 +1,40 @@
+{
+  "name": "buenasmigas",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @buenasmigas/db db:push",
+    "db:studio": "turbo -F @buenasmigas/db db:studio",
+    "db:generate": "turbo -F @buenasmigas/db db:generate",
+    "db:reset-init": "pnpm --filter @buenasmigas/db db:reset-init",
+    "db:migrate": "turbo -F @buenasmigas/db db:migrate",
+    "db:seed": "pnpm --filter server db:seed",
+    "db:start": "turbo -F @buenasmigas/db db:start",
+    "db:watch": "turbo -F @buenasmigas/db db:watch",
+    "db:stop": "turbo -F @buenasmigas/db db:stop",
+    "db:down": "turbo -F @buenasmigas/db db:down",
+    "check": "biome check --write ."
+  },
+  "dependencies": {
+    "@buenasmigas/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.16",
+    "@buenasmigas/config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "turbo": "^2.9.16"
+  },
+  "packageManager": "pnpm@10.14.0"
+}

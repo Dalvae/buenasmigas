@@ -9,36 +9,36 @@ import { toast } from "sonner";
 import { getToken } from "@/lib/token";
 
 export function createQueryClient() {
-  return new QueryClient({
-    queryCache: new QueryCache({
-      onError: (error, query) => {
-        toast.error(`Error: ${error.message}`, {
-          action: {
-            label: "retry",
-            onClick: () => {
-              query.invalidate();
-            },
-          },
-        });
-      },
-    }),
-  });
+	return new QueryClient({
+		queryCache: new QueryCache({
+			onError: (error, query) => {
+				toast.error(`Error: ${error.message}`, {
+					action: {
+						label: "retry",
+						onClick: () => {
+							query.invalidate();
+						},
+					},
+				});
+			},
+		}),
+	});
 }
 
 export const queryClient = createQueryClient();
 
 export const link = new RPCLink({
-  url: `${env.VITE_SERVER_URL}/rpc`,
-  headers: () => {
-    const token = getToken();
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  },
-  fetch(url, options) {
-    return fetch(url, {
-      ...options,
-      credentials: "include",
-    });
-  },
+	url: `${env.VITE_SERVER_URL}/rpc`,
+	headers: () => {
+		const token = getToken();
+		return token ? { Authorization: `Bearer ${token}` } : {};
+	},
+	fetch(url, options) {
+		return fetch(url, {
+			...options,
+			credentials: "include",
+		});
+	},
 });
 
 export const client: AppRouterClient = createORPCClient(link);

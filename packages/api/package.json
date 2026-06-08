@@ -1,30 +1,30 @@
 {
-  "name": "@buenasmigas/api",
-  "type": "module",
-  "exports": {
-    ".": {
-      "default": "./src/index.ts"
-    },
-    "./*": {
-      "default": "./src/*.ts"
-    }
-  },
-  "scripts": {},
-  "dependencies": {
-    "@buenasmigas/auth": "workspace:*",
-    "@buenasmigas/db": "workspace:*",
-    "@buenasmigas/env": "workspace:*",
-    "@orpc/client": "catalog:",
-    "@orpc/openapi": "catalog:",
-    "@orpc/server": "catalog:",
-    "@orpc/zod": "catalog:",
-    "better-auth": "catalog:",
-    "dotenv": "catalog:",
-    "drizzle-orm": "^0.45.1",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@buenasmigas/config": "workspace:*",
-    "typescript": "catalog:"
-  }
+	"name": "@buenasmigas/api",
+	"type": "module",
+	"exports": {
+		".": {
+			"default": "./src/index.ts"
+		},
+		"./*": {
+			"default": "./src/*.ts"
+		}
+	},
+	"scripts": {},
+	"dependencies": {
+		"@buenasmigas/auth": "workspace:*",
+		"@buenasmigas/db": "workspace:*",
+		"@buenasmigas/env": "workspace:*",
+		"@orpc/client": "catalog:",
+		"@orpc/openapi": "catalog:",
+		"@orpc/server": "catalog:",
+		"@orpc/zod": "catalog:",
+		"better-auth": "catalog:",
+		"dotenv": "catalog:",
+		"drizzle-orm": "^0.45.1",
+		"zod": "catalog:"
+	},
+	"devDependencies": {
+		"@buenasmigas/config": "workspace:*",
+		"typescript": "catalog:"
+	}
 }

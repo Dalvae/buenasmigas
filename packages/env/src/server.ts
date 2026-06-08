@@ -13,6 +13,9 @@ export const env = createEnv({
     ADMIN_EMAIL: z.email().default("admin@buenasmigas.cl"),
     ADMIN_PASSWORD: z.string().min(8).default("buenasmigas2026"),
     ADMIN_NAME: z.string().default("Administrador"),
+    PORT: z.coerce.number().default(3000),
+    // Ruta del build estático del frontend a servir (Docker). En dev se omite.
+    WEB_DIST: z.string().optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

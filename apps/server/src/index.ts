@@ -1,14 +1,23 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { createContext } from "@buenasmigas/api/context";
 import { appRouter } from "@buenasmigas/api/routers/index";
 import { auth } from "@buenasmigas/auth";
 import { env } from "@buenasmigas/env/server";
 import fastifyCors from "@fastify/cors";
+import fastifyHelmet from "@fastify/helmet";
+import fastifyRateLimit from "@fastify/rate-limit";
+import fastifyStatic from "@fastify/static";
 import { OpenAPIHandler } from "@orpc/openapi/fastify";
 import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
 import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fastify";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
+import { fromNodeHeaders } from "better-auth/node";
 import Fastify from "fastify";
+
+import { generarExcel } from "./export-excel";
 
 const baseCorsConfig = {
   origin: env.CORS_ORIGIN,
@@ -43,6 +52,12 @@ const fastify = Fastify({
   logger: true,
 });
 
+// Seguridad (RNF-02). CSP off para no romper el SPA estático servido aquí.
+fastify.register(fastifyHelmet, {
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+});
+fastify.register(fastifyRateLimit, { max: 600, timeWindow: "1 minute" });
 fastify.register(fastifyCors, baseCorsConfig);
 
 fastify.register(async (rpcApp) => {
@@ -103,14 +118,61 @@ fastify.route({
   },
 });
 
-fastify.get("/", async () => {
-  return "OK";
+// RF-EXP: exportar registros a Excel (requiere sesión)
+fastify.get("/export/excel", async (request, reply) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(request.headers),
+  });
+  if (!session?.user) {
+    return reply.code(401).send({ error: "No autorizado" });
+  }
+  const q = request.query as Record<string, string | undefined>;
+  if (!q.desde || !q.hasta) {
+    return reply.code(400).send({ error: "Faltan parámetros desde/hasta" });
+  }
+  const buf = await generarExcel({
+    desde: q.desde,
+    hasta: q.hasta,
+    turno: q.turno as "1" | "2" | "3" | undefined,
+    operarioId: q.operarioId ? Number(q.operarioId) : undefined,
+  });
+  reply.header(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  );
+  reply.header(
+    "Content-Disposition",
+    `attachment; filename="buenasmigas_${q.desde}_${q.hasta}.xlsx"`,
+  );
+  return reply.send(buf);
 });
 
-fastify.listen({ port: 3000 }, (err) => {
+// Frontend estático servido por el mismo proceso (solo si existe el build).
+const webDist = env.WEB_DIST ?? join(import.meta.dir, "../../web/dist");
+if (existsSync(webDist)) {
+  fastify.register(fastifyStatic, { root: webDist, wildcard: false });
+  // SPA fallback: las rutas no-API devuelven index.html
+  fastify.setNotFoundHandler((request, reply) => {
+    const isApi =
+      request.url.startsWith("/rpc") ||
+      request.url.startsWith("/api") ||
+      request.url.startsWith("/export");
+    if (request.method === "GET" && !isApi) {
+      return reply.sendFile("index.html");
+    }
+    reply.code(404).send({ error: "Not found" });
+  });
+} else {
+  fastify.get(
+    "/",
+    async () => "OK — API Buenas Migas (frontend estático no encontrado, modo dev)",
+  );
+}
+
+fastify.listen({ port: env.PORT, host: "0.0.0.0" }, (err) => {
   if (err) {
     fastify.log.error(err);
     process.exit(1);
   }
-  console.log("Server running on port 3000");
+  console.log(`Server running on port ${env.PORT}`);
 });

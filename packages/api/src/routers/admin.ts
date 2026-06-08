@@ -115,25 +115,32 @@ export const adminRouter = {
         role: rolSchema.default("operario"),
       }),
     )
-    .handler(async ({ input, context }) => {
-      const res = await auth.api.createUser({
+    .handler(async ({ input }) => {
+      // Crea el usuario vía Better Auth (rol por defecto "operario") y, si se
+      // pidió admin, eleva el rol directo en la BD. Evita el typing de roles del
+      // plugin admin (que asume "user"|"admin") y su validación en runtime.
+      await auth.api.signUpEmail({
         body: {
           name: input.name,
           email: input.email,
           password: input.password,
-          role: input.role,
         },
-        headers: fromNodeHeaders(context.headers),
       });
-      return { id: res.user.id, email: res.user.email };
+      if (input.role === "admin") {
+        await db
+          .update(user)
+          .set({ role: "admin" })
+          .where(eq(user.email, input.email));
+      }
+      return { email: input.email, role: input.role };
     }),
   cambiarRol: adminProcedure
     .input(z.object({ userId: z.string(), role: rolSchema }))
-    .handler(async ({ input, context }) => {
-      await auth.api.setRole({
-        body: { userId: input.userId, role: input.role },
-        headers: fromNodeHeaders(context.headers),
-      });
+    .handler(async ({ input }) => {
+      await db
+        .update(user)
+        .set({ role: input.role })
+        .where(eq(user.id, input.userId));
       return { ok: true };
     }),
   // El admin resetea la clave sin conocer la anterior (las claves son hash,

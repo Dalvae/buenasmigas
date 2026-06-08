@@ -107,6 +107,7 @@ export const registrosRouter = {
               createdBy: userId,
             })
             .returning({ id: registro.id });
+          if (!reg) throw new Error("No se pudo crear el registro");
           if (input.envasado.length) {
             await tx
               .insert(envasadoItem)

@@ -45,9 +45,11 @@ export default function SignInForm() {
 	if (isPending) return <Loader />;
 
 	return (
-		<div className="mx-auto mt-16 w-full max-w-sm p-6">
+		<div className="w-full">
 			<div className="mb-8 text-center">
-				<h1 className="font-bold text-3xl">Buenas Migas</h1>
+				<h1 className="font-bold font-display text-4xl text-primary tracking-tight">
+					Buenas Migas
+				</h1>
 				<p className="mt-1 text-muted-foreground text-sm">
 					Registro de producción
 				</p>

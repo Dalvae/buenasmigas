@@ -1,0 +1,23 @@
+- generic [ref=e2]:
+  - generic [ref=e17]:
+    - banner [ref=e18]:
+      - generic [ref=e19]:
+        - link "Buenas Migas" [ref=e20] [cursor=pointer]:
+          - /url: /dashboard
+        - navigation [ref=e21]:
+          - link "Inicio" [ref=e22] [cursor=pointer]:
+            - /url: /dashboard
+          - link "Consultas" [ref=e23] [cursor=pointer]:
+            - /url: /consultas
+          - link "Admin" [ref=e24] [cursor=pointer]:
+            - /url: /admin
+      - generic [ref=e25]:
+        - generic [ref=e26]: Administrador
+        - button "Salir" [ref=e27]
+    - main [ref=e28]:
+      - img [ref=e30]
+  - region "Notifications alt+T":
+    - list:
+      - listitem [ref=e32]:
+        - img [ref=e34]
+        - generic [ref=e38]: Bienvenido

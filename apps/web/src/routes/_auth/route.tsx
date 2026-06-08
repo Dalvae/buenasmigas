@@ -23,13 +23,16 @@ export const Route = createFileRoute("/_auth")({
 	},
 });
 
+const linkClass =
+	"rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:text-primary [&.active]:bg-secondary [&.active]:font-medium [&.active]:text-primary";
+
 function AuthLayout() {
 	const navigate = useNavigate();
 	const { data: session } = authClient.useSession();
 	const role = session?.user?.role;
 
 	const links = [
-		{ to: "/dashboard", label: "Captura" },
+		{ to: "/dashboard", label: "Inicio" },
 		{ to: "/consultas", label: "Consultas" },
 	] as const;
 
@@ -41,31 +44,37 @@ function AuthLayout() {
 
 	return (
 		<div className="flex h-full flex-col overflow-hidden">
-			<header className="flex items-center justify-between gap-4 border-b px-4 py-2">
-				<nav className="flex items-center gap-2 text-sm">
-					{links.map(({ to, label }) => (
-						<Link
-							key={to}
-							to={to}
-							className="rounded-none px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground [&.active]:bg-muted [&.active]:font-medium [&.active]:text-foreground"
-						>
-							{label}
-						</Link>
-					))}
-					{role === "admin" ? (
-						<Link
-							to="/admin"
-							className="rounded-none px-3 py-1.5 text-muted-foreground transition-colors hover:text-foreground [&.active]:bg-muted [&.active]:font-medium [&.active]:text-foreground"
-						>
-							Admin
-						</Link>
-					) : null}
-				</nav>
+			<header className="flex items-center justify-between gap-4 border-b bg-background px-4 py-3">
+				<div className="flex items-center gap-6">
+					<Link
+						to="/dashboard"
+						className="font-bold font-display text-primary text-xl tracking-tight"
+					>
+						Buenas Migas
+					</Link>
+					<nav className="flex items-center gap-1 text-sm">
+						{links.map(({ to, label }) => (
+							<Link key={to} to={to} className={linkClass}>
+								{label}
+							</Link>
+						))}
+						{role === "admin" ? (
+							<Link to="/admin" className={linkClass}>
+								Admin
+							</Link>
+						) : null}
+					</nav>
+				</div>
 				<div className="flex items-center gap-3">
 					<span className="text-muted-foreground text-sm">
 						{session?.user?.name}
 					</span>
-					<Button variant="outline" size="sm" onClick={handleLogout}>
+					<Button
+						variant="outline"
+						size="sm"
+						className="rounded-md"
+						onClick={handleLogout}
+					>
 						Salir
 					</Button>
 				</div>

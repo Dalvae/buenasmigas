@@ -12,7 +12,6 @@ import {
 import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
 import { useState } from "react";
 
-import Header from "@/components/header";
 import { ThemeProvider } from "@/components/theme-provider";
 import { link, type orpc } from "@/utils/orpc";
 
@@ -55,10 +54,11 @@ function RootComponent() {
 				attribute="class"
 				defaultTheme="light"
 				disableTransitionOnChange
+				enableSystem={false}
+				forcedTheme="light"
 				storageKey="vite-ui-theme"
 			>
-				<div className="grid h-svh grid-rows-[auto_1fr]">
-					<Header />
+				<div className="h-svh">
 					<Outlet />
 				</div>
 				<Toaster richColors />

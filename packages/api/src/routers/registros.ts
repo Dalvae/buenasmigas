@@ -90,6 +90,223 @@ export const registrosRouter = {
 		return { operarios, tipos, config };
 	}),
 
+	// Lee el registro de un turno (fecha+turno) con sus ítems, o null si no existe.
+	// Prellena las pantallas de cada módulo y permite mostrar el semáforo.
+	porFechaTurno: protectedProcedure
+		.input(z.object({ fecha: z.string(), turno: turnoSchema }))
+		.handler(async ({ input }) => {
+			const [reg] = await db
+				.select()
+				.from(registro)
+				.where(
+					and(eq(registro.fecha, input.fecha), eq(registro.turno, input.turno)),
+				);
+			if (!reg) return null;
+			const envasado = await db
+				.select({
+					id: envasadoItem.id,
+					tipoEnvasadoId: envasadoItem.tipoEnvasadoId,
+					tipo: tipoEnvasado.nombre,
+					pedido: envasadoItem.pedido,
+					real: envasadoItem.real,
+				})
+				.from(envasadoItem)
+				.innerJoin(
+					tipoEnvasado,
+					eq(envasadoItem.tipoEnvasadoId, tipoEnvasado.id),
+				)
+				.where(eq(envasadoItem.registroId, reg.id));
+			const pnc = await db
+				.select()
+				.from(pncItem)
+				.where(eq(pncItem.registroId, reg.id));
+			return { ...reg, envasado, pnc };
+		}),
+
+	// Upsert Elaboración (wireframe: pantalla propia). Crea o actualiza el turno.
+	upsertElaboracion: protectedProcedure
+		.input(
+			z.object({
+				fecha: z.string(),
+				turno: turnoSchema,
+				operarioId: z.number().int().positive(),
+				batchReal: z.number().int().min(0),
+				batchProg: z.number().int().min(0),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const cfg = await getConfig();
+			const elaboracionPct = calcElaboracionPct(
+				input.batchReal,
+				input.batchProg,
+				cfg.decimales_pct ?? 1,
+			);
+			const userId = context.session?.user?.id ?? null;
+			const id = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({ id: registro.id })
+					.from(registro)
+					.where(
+						and(
+							eq(registro.fecha, input.fecha),
+							eq(registro.turno, input.turno),
+						),
+					);
+				let regId = existing?.id;
+				if (!regId) {
+					const [created] = await tx
+						.insert(registro)
+						.values({
+							fecha: input.fecha,
+							turno: input.turno,
+							operarioId: input.operarioId,
+							createdBy: userId,
+						})
+						.returning({ id: registro.id });
+					if (!created) throw new Error("No se pudo crear el registro");
+					regId = created.id;
+				}
+				await tx
+					.update(registro)
+					.set({
+						operarioId: input.operarioId,
+						batchReal: input.batchReal,
+						batchProg: input.batchProg,
+						elaboracionPct,
+					})
+					.where(eq(registro.id, regId));
+				await tx.insert(auditoria).values({
+					registroId: regId,
+					accion: "editar",
+					usuarioId: userId,
+					detalle: "Elaboración",
+				});
+				return regId;
+			});
+			return { id, elaboracionPct };
+		}),
+
+	// Upsert Envasado.
+	upsertEnvasado: protectedProcedure
+		.input(
+			z.object({
+				fecha: z.string(),
+				turno: turnoSchema,
+				operarioId: z.number().int().positive(),
+				envasado: z.array(envasadoItemSchema).default([]),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const cfg = await getConfig();
+			const envasadoPct = calcEnvasadoPct(
+				input.envasado,
+				cfg.decimales_pct ?? 1,
+			);
+			const userId = context.session?.user?.id ?? null;
+			const id = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({ id: registro.id })
+					.from(registro)
+					.where(
+						and(
+							eq(registro.fecha, input.fecha),
+							eq(registro.turno, input.turno),
+						),
+					);
+				let regId = existing?.id;
+				if (!regId) {
+					const [created] = await tx
+						.insert(registro)
+						.values({
+							fecha: input.fecha,
+							turno: input.turno,
+							operarioId: input.operarioId,
+							createdBy: userId,
+						})
+						.returning({ id: registro.id });
+					if (!created) throw new Error("No se pudo crear el registro");
+					regId = created.id;
+				}
+				await tx
+					.update(registro)
+					.set({ operarioId: input.operarioId, envasadoPct })
+					.where(eq(registro.id, regId));
+				await tx.delete(envasadoItem).where(eq(envasadoItem.registroId, regId));
+				if (input.envasado.length) {
+					await tx
+						.insert(envasadoItem)
+						.values(input.envasado.map((i) => ({ ...i, registroId: regId })));
+				}
+				await tx.insert(auditoria).values({
+					registroId: regId,
+					accion: "editar",
+					usuarioId: userId,
+					detalle: "Envasado",
+				});
+				return regId;
+			});
+			return { id, envasadoPct };
+		}),
+
+	// Upsert PNC.
+	upsertPnc: protectedProcedure
+		.input(
+			z.object({
+				fecha: z.string(),
+				turno: turnoSchema,
+				operarioId: z.number().int().positive(),
+				pnc: z.array(pncItemSchema).default([]),
+			}),
+		)
+		.handler(async ({ input, context }) => {
+			const cfg = await getConfig();
+			const pncTotalKg = calcPncTotalKg(input.pnc, cfg);
+			const userId = context.session?.user?.id ?? null;
+			const id = await db.transaction(async (tx) => {
+				const [existing] = await tx
+					.select({ id: registro.id })
+					.from(registro)
+					.where(
+						and(
+							eq(registro.fecha, input.fecha),
+							eq(registro.turno, input.turno),
+						),
+					);
+				let regId = existing?.id;
+				if (!regId) {
+					const [created] = await tx
+						.insert(registro)
+						.values({
+							fecha: input.fecha,
+							turno: input.turno,
+							operarioId: input.operarioId,
+							createdBy: userId,
+						})
+						.returning({ id: registro.id });
+					if (!created) throw new Error("No se pudo crear el registro");
+					regId = created.id;
+				}
+				await tx
+					.update(registro)
+					.set({ operarioId: input.operarioId, pncTotalKg })
+					.where(eq(registro.id, regId));
+				await tx.delete(pncItem).where(eq(pncItem.registroId, regId));
+				if (input.pnc.length) {
+					await tx
+						.insert(pncItem)
+						.values(input.pnc.map((i) => ({ ...i, registroId: regId })));
+				}
+				await tx.insert(auditoria).values({
+					registroId: regId,
+					accion: "editar",
+					usuarioId: userId,
+					detalle: "PNC",
+				});
+				return regId;
+			});
+			return { id, pncTotalKg };
+		}),
+
 	// RF-CAP: crear un registro por turno (único por fecha+turno)
 	crear: protectedProcedure
 		.input(registroInput)

@@ -1,15 +1,7 @@
-# Imagen única: buildea el frontend estático y corre el server Fastify con Bun
-# sirviendo UI + API en UN solo proceso. Postgres va aparte (docker-compose).
-
-FROM node:22-slim AS base
+# ---- Build: node + pnpm. Instala el workspace, compila el SPA y poda devDeps ----
+FROM node:22-slim AS build
 WORKDIR /app
-# pnpm (gestor del monorepo) + bun (runtime)
-RUN corepack enable \
-  && corepack prepare pnpm@10.14.0 --activate \
-  && npm install -g bun@1.3.8
-
-# --- Build: instala deps y compila el frontend ---
-FROM base AS build
+RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json ./
 COPY apps ./apps
 COPY packages ./packages
@@ -18,12 +10,16 @@ RUN pnpm install --frozen-lockfile
 ARG VITE_SERVER_URL=https://buenasmigas.dalvae.cl
 ENV VITE_SERVER_URL=$VITE_SERVER_URL
 RUN pnpm --filter web build
+# Deja solo dependencias de producción (saca vite, typescript, drizzle-kit, etc.).
+RUN pnpm prune --prod
 
-# --- Runner: reusa el build (tiene node_modules + fuente + web/dist) ---
-FROM build AS runner
+# ---- Runtime: solo Bun (slim). Migra + seed + server en UN proceso ----
+FROM oven/bun:1.3.8-slim AS runner
+WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV WEB_DIST=/app/apps/web/dist
+COPY --from=build /app /app
 EXPOSE 3000
-# Aplica migraciones, asegura datos base (admin/operarios/tipos) y arranca el server.
-CMD ["sh", "-c", "pnpm --filter @buenasmigas/db db:migrate && pnpm --filter server db:seed && cd apps/server && bun src/index.ts"]
+# Migra (migrador nativo de Bun), asegura datos base y arranca el server.
+CMD ["sh", "-c", "cd apps/server && bun src/migrate.ts && bun src/seed.ts && bun src/index.ts"]

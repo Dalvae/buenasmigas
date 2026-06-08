@@ -1,0 +1,24 @@
+{
+  "name": "@buenasmigas/auth",
+  "type": "module",
+  "exports": {
+    ".": {
+      "default": "./src/index.ts"
+    },
+    "./*": {
+      "default": "./src/*.ts"
+    }
+  },
+  "scripts": {},
+  "dependencies": {
+    "@buenasmigas/db": "workspace:*",
+    "@buenasmigas/env": "workspace:*",
+    "better-auth": "catalog:",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@buenasmigas/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

@@ -55,3 +55,11 @@ temp
 
 # OMC tooling state (local)
 .omc/
+
+# Playwright (e2e)
+.playwright-cli/
+test-results/
+playwright-report/
+blob-report/
+**/playwright/.cache/
+**/e2e/.auth/

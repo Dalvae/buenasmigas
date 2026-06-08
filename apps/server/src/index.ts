@@ -23,6 +23,7 @@ const baseCorsConfig = {
   origin: env.CORS_ORIGIN,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  exposedHeaders: ["set-auth-token"],
   credentials: true,
   maxAge: 86400,
 };

@@ -28,6 +28,7 @@
     "next-themes": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
+    "recharts": "^2.15.0",
     "sonner": "^2.0.7",
     "zod": "catalog:"
   },

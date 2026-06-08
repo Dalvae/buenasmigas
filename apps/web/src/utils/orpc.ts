@@ -6,6 +6,8 @@ import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import { QueryCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { getToken } from "@/lib/token";
+
 export function createQueryClient() {
   return new QueryClient({
     queryCache: new QueryCache({
@@ -27,6 +29,10 @@ export const queryClient = createQueryClient();
 
 export const link = new RPCLink({
   url: `${env.VITE_SERVER_URL}/rpc`,
+  headers: () => {
+    const token = getToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  },
   fetch(url, options) {
     return fetch(url, {
       ...options,

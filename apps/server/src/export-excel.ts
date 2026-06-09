@@ -1,36 +1,22 @@
-import { db, operario, registro } from "@buenasmigas/db";
-import { and, asc, between, eq } from "drizzle-orm";
 import ExcelJS from "exceljs";
 
-export interface ExportFiltro {
-	desde: string;
-	hasta: string;
-	turno?: "1" | "2" | "3";
-	operarioId?: number;
+// Formateador puro: recibe las filas YA resueltas por la capa service
+// (services/registros.listar — misma query e indicadores derivados que la UI) y
+// devuelve el Buffer .xlsx. No accede a la DB ni a Drizzle (sin fuga de capa).
+export interface ExportRow {
+	fecha: string;
+	turno: string;
+	operario: string;
+	batchReal: number;
+	batchProg: number;
+	elaboracionPct: number;
+	envasadoPct: number;
+	pncTotalKg: number;
+	pncPct: number;
 }
 
 // RF-EXP: genera un .xlsx con los registros del período/filtros.
-export async function generarExcel(filtro: ExportFiltro): Promise<Buffer> {
-	const conds = [between(registro.fecha, filtro.desde, filtro.hasta)];
-	if (filtro.turno) conds.push(eq(registro.turno, filtro.turno));
-	if (filtro.operarioId) conds.push(eq(registro.operarioId, filtro.operarioId));
-
-	const rows = await db
-		.select({
-			fecha: registro.fecha,
-			turno: registro.turno,
-			operario: operario.nombre,
-			batchReal: registro.batchReal,
-			batchProg: registro.batchProg,
-			elaboracionPct: registro.elaboracionPct,
-			envasadoPct: registro.envasadoPct,
-			pncTotalKg: registro.pncTotalKg,
-		})
-		.from(registro)
-		.innerJoin(operario, eq(registro.operarioId, operario.id))
-		.where(and(...conds))
-		.orderBy(asc(registro.fecha), asc(registro.turno));
-
+export async function generarExcel(rows: ExportRow[]): Promise<Buffer> {
 	const wb = new ExcelJS.Workbook();
 	wb.creator = "Buenas Migas";
 	const ws = wb.addWorksheet("Producción");
@@ -43,6 +29,7 @@ export async function generarExcel(filtro: ExportFiltro): Promise<Buffer> {
 		{ header: "% Cumpl. Elab.", key: "elaboracionPct", width: 15 },
 		{ header: "% Envasado", key: "envasadoPct", width: 13 },
 		{ header: "PNC (kg)", key: "pncTotalKg", width: 12 },
+		{ header: "% PNC", key: "pncPct", width: 10 },
 	];
 	ws.getRow(1).font = { bold: true };
 	for (const r of rows) ws.addRow(r);

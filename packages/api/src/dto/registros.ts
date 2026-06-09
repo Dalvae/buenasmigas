@@ -12,13 +12,26 @@ export const envasadoItemDto = z.object({
 	real: z.number().int().min(0),
 });
 
-export const pncItemDto = z.object({
-	descripcion: z.string().optional(),
-	unidades: z.number().min(0),
-	kilos: z.number().min(0),
-	bandejas: z.number().min(0),
-	carros: z.number().min(0).default(0),
-});
+export const pncItemDto = z
+	.object({
+		descripcion: z.string().optional(),
+		unidades: z.number().min(0),
+		kilos: z.number().min(0),
+		bandejas: z.number().min(0),
+		carros: z.number().min(0).default(0),
+	})
+	// Una fila PNC totalmente vacía (todo en 0 y sin descripción) no aporta nada y
+	// no debe persistirse vía API directa (el front ya las filtra). Exige al menos
+	// un valor > 0 o una descripción no vacía.
+	.refine(
+		(i) =>
+			i.unidades > 0 ||
+			i.kilos > 0 ||
+			i.bandejas > 0 ||
+			i.carros > 0 ||
+			(i.descripcion?.trim().length ?? 0) > 0,
+		{ message: "La fila PNC no puede estar vacía." },
+	);
 
 export const fechaTurnoDto = z.object({ fecha: z.string(), turno: turnoDto });
 
@@ -69,6 +82,17 @@ export const filtroDto = z.object({
 	operarioId: z.number().int().positive().optional(),
 });
 
+// Filtro del export Excel. Llega como query string (no JSON), así que valida
+// formato de fecha y coacciona `operarioId`. El endpoint lo usa para rechazar
+// con 400 antes de tocar la DB y para construir el filename de forma segura.
+const fechaIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const exportQueryDto = z.object({
+	desde: fechaIso,
+	hasta: fechaIso,
+	turno: turnoDto.optional(),
+	operarioId: z.coerce.number().int().positive().optional(),
+});
+
 // Tipos del contrato, reusados por los services (única fuente de verdad de la
 // forma del input, vía z.infer; nunca se reescriben a mano).
 export type Turno = z.infer<typeof turnoDto>;
@@ -80,3 +104,4 @@ export type UpsertPncDto = z.infer<typeof upsertPncDto>;
 export type RegistroDto = z.infer<typeof registroDto>;
 export type ActualizarRegistroDto = z.infer<typeof actualizarRegistroDto>;
 export type FiltroDto = z.infer<typeof filtroDto>;
+export type ExportQueryDto = z.infer<typeof exportQueryDto>;

@@ -2,7 +2,8 @@ CREATE TYPE "public"."accion_auditoria" AS ENUM('crear', 'editar', 'borrar');-->
 CREATE TYPE "public"."turno" AS ENUM('1', '2', '3');--> statement-breakpoint
 CREATE TABLE "auditoria" (
 	"id" serial PRIMARY KEY NOT NULL,
-	"registro_id" integer,
+	"entidad" text NOT NULL,
+	"entidad_id" text,
 	"accion" "accion_auditoria" NOT NULL,
 	"usuario_id" text,
 	"detalle" text,
@@ -48,9 +49,6 @@ CREATE TABLE "registro" (
 	"operario_id" integer NOT NULL,
 	"batch_real" integer DEFAULT 0 NOT NULL,
 	"batch_prog" integer DEFAULT 0 NOT NULL,
-	"elaboracion_pct" double precision DEFAULT 0 NOT NULL,
-	"envasado_pct" double precision DEFAULT 0 NOT NULL,
-	"pnc_total_kg" double precision DEFAULT 0 NOT NULL,
 	"created_by" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
@@ -91,7 +89,7 @@ CREATE TABLE "session" (
 	"expires_at" timestamp NOT NULL,
 	"token" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
 	"ip_address" text,
 	"user_agent" text,
 	"user_id" text NOT NULL,

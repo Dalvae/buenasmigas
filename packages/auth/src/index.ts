@@ -17,6 +17,10 @@ export function createAuth() {
 		trustedOrigins: [env.CORS_ORIGIN],
 		emailAndPassword: {
 			enabled: true,
+			// RF-AUTH-07: no hay alta pública. El endpoint HTTP de signup queda
+			// cerrado; el alta sólo ocurre server-side (seed + admin.createUser),
+			// que corre con privilegio interno y no pasa por este flag.
+			disableSignUp: true,
 		},
 		user: {
 			additionalFields: {
@@ -41,7 +45,10 @@ export function createAuth() {
 		},
 		advanced: {
 			defaultCookieAttributes: {
-				sameSite: "none",
+				// En prod el SPA y la API comparten dominio → `lax` (menos superficie
+				// CSRF). `none` sólo en dev, donde el SPA (:3001) y la API (:3000) son
+				// cross-origin y la cookie debe viajar entre puertos distintos.
+				sameSite: env.NODE_ENV === "production" ? "lax" : "none",
 				secure: true,
 				httpOnly: true,
 			},

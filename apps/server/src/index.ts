@@ -2,7 +2,9 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 import { createContext } from "@buenasmigas/api/context";
+import { exportQueryDto } from "@buenasmigas/api/dto/registros";
 import { appRouter } from "@buenasmigas/api/routers/index";
+import * as registros from "@buenasmigas/api/services/registros";
 import { auth } from "@buenasmigas/auth";
 import { env } from "@buenasmigas/env/server";
 import fastifyCors from "@fastify/cors";
@@ -15,7 +17,7 @@ import { onError } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fastify";
 import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { fromNodeHeaders } from "better-auth/node";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 
 import { generarExcel } from "./export-excel";
 
@@ -36,29 +38,48 @@ const rpcHandler = new RPCHandler(appRouter, {
 	],
 });
 
-const apiHandler = new OpenAPIHandler(appRouter, {
-	plugins: [
-		new OpenAPIReferencePlugin({
-			schemaConverters: [new ZodToJsonSchemaConverter()],
-		}),
-	],
-	interceptors: [
-		onError((error) => {
-			console.error(error);
-		}),
-	],
-});
+// Referencia OpenAPI (/api-reference): sólo fuera de producción. Exponer el
+// esquema completo (incluidas rutas admin) en prod facilita el reconocimiento.
+const isProd = env.NODE_ENV === "production";
+const apiHandler = isProd
+	? null
+	: new OpenAPIHandler(appRouter, {
+			plugins: [
+				new OpenAPIReferencePlugin({
+					schemaConverters: [new ZodToJsonSchemaConverter()],
+				}),
+			],
+			interceptors: [
+				onError((error) => {
+					console.error(error);
+				}),
+			],
+		});
 
 const fastify = Fastify({
 	logger: true,
 });
 
-// Seguridad (RNF-02). CSP off para no romper el SPA estático servido aquí.
+// Seguridad (RNF-02). CSP explícita para el SPA de Vite (defensa en profundidad
+// frente al token en localStorage): scripts/estilos/imagenes/conexiones propios.
+// `style-src 'unsafe-inline'` porque Vite/Tailwind inyecta estilos inline.
 fastify.register(fastifyHelmet, {
-	contentSecurityPolicy: false,
+	contentSecurityPolicy: {
+		directives: {
+			defaultSrc: ["'self'"],
+			scriptSrc: ["'self'"],
+			styleSrc: ["'self'", "'unsafe-inline'"],
+			imgSrc: ["'self'", "data:"],
+			connectSrc: ["'self'"],
+			fontSrc: ["'self'", "data:"],
+		},
+	},
 	crossOriginEmbedderPolicy: false,
 });
-fastify.register(fastifyRateLimit, { max: 600, timeWindow: "1 minute" });
+// Rate limit global generoso para el uso normal de la app. Se AWAITEA antes de
+// declarar rutas para que el hook `onRoute` del plugin quede instalado y aplique
+// (incluidos los overrides `config.rateLimit` por ruta, p.ej. el sign-in).
+await fastify.register(fastifyRateLimit, { max: 600, timeWindow: "1 minute" });
 fastify.register(fastifyCors, baseCorsConfig);
 
 fastify.register(async (rpcApp) => {
@@ -78,47 +99,64 @@ fastify.register(async (rpcApp) => {
 		}
 	});
 
-	rpcApp.all("/api-reference/*", async (request, reply) => {
-		const { matched } = await apiHandler.handle(request, reply, {
-			context: await createContext(request.headers),
-			prefix: "/api-reference",
-		});
+	if (apiHandler) {
+		rpcApp.all("/api-reference/*", async (request, reply) => {
+			const { matched } = await apiHandler.handle(request, reply, {
+				context: await createContext(request.headers),
+				prefix: "/api-reference",
+			});
 
-		if (!matched) {
-			reply.status(404).send();
-		}
-	});
+			if (!matched) {
+				reply.status(404).send();
+			}
+		});
+	}
+});
+
+async function handleAuth(
+	request: FastifyRequest,
+	reply: FastifyReply,
+): Promise<void> {
+	try {
+		const url = new URL(request.url, `http://${request.headers.host}`);
+		const headers = new Headers();
+		Object.entries(request.headers).forEach(([key, value]) => {
+			if (value) headers.append(key, value.toString());
+		});
+		const req = new Request(url.toString(), {
+			method: request.method,
+			headers,
+			body: request.body ? JSON.stringify(request.body) : undefined,
+		});
+		const response = await auth.handler(req);
+		reply.status(response.status);
+		response.headers.forEach((value, key) => {
+			reply.header(key, value);
+		});
+		reply.send(response.body ? await response.text() : null);
+	} catch (error) {
+		fastify.log.error({ err: error }, "Authentication Error:");
+		reply.status(500).send({
+			error: "Internal authentication error",
+			code: "AUTH_FAILURE",
+		});
+	}
+}
+
+// Sign-in: ruta más específica que el wildcard, con rate limit estricto (~10/min
+// por IP) para frenar fuerza bruta de contraseñas. El resto de /api/auth/* (que
+// incluye chequeos de sesión frecuentes) sigue bajo el límite global de 600/min.
+fastify.route({
+	method: ["GET", "POST"],
+	url: "/api/auth/sign-in/*",
+	config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+	handler: handleAuth,
 });
 
 fastify.route({
 	method: ["GET", "POST"],
 	url: "/api/auth/*",
-	async handler(request, reply) {
-		try {
-			const url = new URL(request.url, `http://${request.headers.host}`);
-			const headers = new Headers();
-			Object.entries(request.headers).forEach(([key, value]) => {
-				if (value) headers.append(key, value.toString());
-			});
-			const req = new Request(url.toString(), {
-				method: request.method,
-				headers,
-				body: request.body ? JSON.stringify(request.body) : undefined,
-			});
-			const response = await auth.handler(req);
-			reply.status(response.status);
-			response.headers.forEach((value, key) => {
-				reply.header(key, value);
-			});
-			reply.send(response.body ? await response.text() : null);
-		} catch (error) {
-			fastify.log.error({ err: error }, "Authentication Error:");
-			reply.status(500).send({
-				error: "Internal authentication error",
-				code: "AUTH_FAILURE",
-			});
-		}
-	},
+	handler: handleAuth,
 });
 
 // RF-EXP: exportar registros a Excel (requiere sesión)
@@ -129,25 +167,32 @@ fastify.get("/export/excel", async (request, reply) => {
 	if (!session?.user) {
 		return reply.code(401).send({ error: "No autorizado" });
 	}
-	const q = request.query as Record<string, string | undefined>;
-	if (!q.desde || !q.hasta) {
-		return reply.code(400).send({ error: "Faltan parámetros desde/hasta" });
+	// Validación con zod ANTES de usar: rechaza fechas/turno/operario malformados
+	// con 400 (en vez de reventar en la query o corromper el filename del header).
+	const parsed = exportQueryDto.safeParse(request.query);
+	if (!parsed.success) {
+		return reply.code(400).send({ error: "Parámetros inválidos" });
 	}
-	const buf = await generarExcel({
-		desde: q.desde,
-		hasta: q.hasta,
-		turno: q.turno as "1" | "2" | "3" | undefined,
-		operarioId: q.operarioId ? Number(q.operarioId) : undefined,
-	});
-	reply.header(
-		"Content-Type",
-		"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-	);
-	reply.header(
-		"Content-Disposition",
-		`attachment; filename="buenasmigas_${q.desde}_${q.hasta}.xlsx"`,
-	);
-	return reply.send(buf);
+	const q = parsed.data;
+	try {
+		// El export pasa por la capa service (misma query e indicadores derivados
+		// que la UI); este endpoint sólo formatea las filas resueltas a .xlsx.
+		const rows = await registros.exportar(q);
+		const buf = await generarExcel(rows);
+		reply.header(
+			"Content-Type",
+			"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+		);
+		// Filename con valores YA validados (formato fecha garantizado).
+		reply.header(
+			"Content-Disposition",
+			`attachment; filename="buenasmigas_${q.desde}_${q.hasta}.xlsx"`,
+		);
+		return reply.send(buf);
+	} catch (err) {
+		fastify.log.error({ err }, "Excel export error");
+		return reply.code(500).send({ error: "No se pudo generar el Excel" });
+	}
 });
 
 // Frontend estático servido por el mismo proceso (solo si existe el build).

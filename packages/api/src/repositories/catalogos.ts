@@ -2,7 +2,13 @@
 // tipos de envasado) y a los parámetros de fórmula. Única capa que conoce el
 // schema de Drizzle para estos dominios.
 
-import { configFormula, db, operario, tipoEnvasado } from "@buenasmigas/db";
+import {
+	auditoria,
+	configFormula,
+	db,
+	operario,
+	tipoEnvasado,
+} from "@buenasmigas/db";
 import { asc, eq } from "drizzle-orm";
 
 // --- Operarios ---
@@ -17,21 +23,40 @@ export function listOperarios(opts?: { soloActivos?: boolean }) {
 	return db.select().from(operario).orderBy(asc(operario.nombre));
 }
 
-export async function createOperario(nombre: string) {
-	const [row] = await db.insert(operario).values({ nombre }).returning();
-	return row;
+export function createOperario(nombre: string, actorUserId: string | null) {
+	return db.transaction(async (tx) => {
+		const [row] = await tx.insert(operario).values({ nombre }).returning();
+		if (!row) throw new Error("No se pudo crear el operario");
+		await tx.insert(auditoria).values({
+			entidad: "operario",
+			entidadId: String(row.id),
+			accion: "crear",
+			usuarioId: actorUserId,
+			detalle: nombre,
+		});
+		return row;
+	});
 }
 
-export async function updateOperario(
+export function updateOperario(
 	id: number,
 	patch: { nombre?: string; activo?: boolean },
+	actorUserId: string | null,
 ) {
-	const [row] = await db
-		.update(operario)
-		.set(patch)
-		.where(eq(operario.id, id))
-		.returning();
-	return row;
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.update(operario)
+			.set(patch)
+			.where(eq(operario.id, id))
+			.returning();
+		await tx.insert(auditoria).values({
+			entidad: "operario",
+			entidadId: String(id),
+			accion: "editar",
+			usuarioId: actorUserId,
+		});
+		return row;
+	});
 }
 
 // --- Tipos de envasado ---
@@ -46,21 +71,40 @@ export function listTipos(opts?: { soloActivos?: boolean }) {
 	return db.select().from(tipoEnvasado).orderBy(asc(tipoEnvasado.nombre));
 }
 
-export async function createTipo(nombre: string) {
-	const [row] = await db.insert(tipoEnvasado).values({ nombre }).returning();
-	return row;
+export function createTipo(nombre: string, actorUserId: string | null) {
+	return db.transaction(async (tx) => {
+		const [row] = await tx.insert(tipoEnvasado).values({ nombre }).returning();
+		if (!row) throw new Error("No se pudo crear el tipo de envasado");
+		await tx.insert(auditoria).values({
+			entidad: "tipo_envasado",
+			entidadId: String(row.id),
+			accion: "crear",
+			usuarioId: actorUserId,
+			detalle: nombre,
+		});
+		return row;
+	});
 }
 
-export async function updateTipo(
+export function updateTipo(
 	id: number,
 	patch: { nombre?: string; activo?: boolean },
+	actorUserId: string | null,
 ) {
-	const [row] = await db
-		.update(tipoEnvasado)
-		.set(patch)
-		.where(eq(tipoEnvasado.id, id))
-		.returning();
-	return row;
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.update(tipoEnvasado)
+			.set(patch)
+			.where(eq(tipoEnvasado.id, id))
+			.returning();
+		await tx.insert(auditoria).values({
+			entidad: "tipo_envasado",
+			entidadId: String(id),
+			accion: "editar",
+			usuarioId: actorUserId,
+		});
+		return row;
+	});
 }
 
 // --- Parámetros de fórmula ---
@@ -75,11 +119,27 @@ export async function getConfigMap(): Promise<Record<string, number>> {
 	return map;
 }
 
-export async function updateConfig(clave: string, valor: number) {
-	const [row] = await db
-		.update(configFormula)
-		.set({ valor })
-		.where(eq(configFormula.clave, clave))
-		.returning();
-	return row;
+export function updateConfig(
+	clave: string,
+	valor: number,
+	actorUserId: string | null,
+) {
+	// Auditado: editar un parámetro de fórmula reinterpreta retroactivamente los
+	// indicadores (que ahora se derivan en lectura), así que queda traza de quién
+	// y qué cambió.
+	return db.transaction(async (tx) => {
+		const [row] = await tx
+			.update(configFormula)
+			.set({ valor })
+			.where(eq(configFormula.clave, clave))
+			.returning();
+		await tx.insert(auditoria).values({
+			entidad: "config_formula",
+			entidadId: clave,
+			accion: "editar",
+			usuarioId: actorUserId,
+			detalle: `${clave} = ${valor}`,
+		});
+		return row;
+	});
 }

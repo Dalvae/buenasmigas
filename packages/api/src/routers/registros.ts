@@ -86,9 +86,16 @@ export const registrosRouter = {
 	// RF-ADM-04: editar registro (solo admin)
 	actualizar: adminProcedure
 		.input(actualizarRegistroDto)
-		.handler(({ input, context }) =>
-			registros.actualizar(input, context.session?.user?.id ?? null),
-		),
+		.handler(async ({ input, context }) => {
+			try {
+				return await registros.actualizar(
+					input,
+					context.session?.user?.id ?? null,
+				);
+			} catch (e) {
+				mapError(e);
+			}
+		}),
 
 	// RF-ADM-04: eliminar registro (solo admin)
 	eliminar: adminProcedure

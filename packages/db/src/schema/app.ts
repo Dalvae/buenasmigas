@@ -65,10 +65,9 @@ export const registro = pgTable(
 		// Elaboración (1:1 inline) — RF-CAP-03 / RF-CALC-01
 		batchReal: integer("batch_real").notNull().default(0),
 		batchProg: integer("batch_prog").notNull().default(0),
-		elaboracionPct: doublePrecision("elaboracion_pct").notNull().default(0),
-		// Totales calculados — RF-CALC-02 / RF-CALC-03
-		envasadoPct: doublePrecision("envasado_pct").notNull().default(0),
-		pncTotalKg: doublePrecision("pnc_total_kg").notNull().default(0),
+		// Los indicadores (%, kg PNC) se DERIVAN en lectura con la config vigente
+		// (RF-CALC); no se persisten en la fila para no congelarlos y que no
+		// diverjan si admin edita `config_formula`.
 		createdBy: text("created_by").references(() => user.id, {
 			onDelete: "set null",
 		}),
@@ -118,10 +117,13 @@ export const pncItem = pgTable(
 	(t) => [index("pnc_item_registro_idx").on(t.registroId)],
 );
 
-// Auditoría de cambios (RNF-10)
+// Auditoría de cambios (RNF-10). Tabla genérica: registra mutaciones de
+// cualquier entidad del dominio (no sólo registros). `entidad` + `entidadId`
+// identifican el objeto afectado (sin FK: la traza debe sobrevivir al borrado).
 export const auditoria = pgTable("auditoria", {
 	id: serial("id").primaryKey(),
-	registroId: integer("registro_id"),
+	entidad: text("entidad").notNull(),
+	entidadId: text("entidad_id"),
 	accion: accionEnum("accion").notNull(),
 	usuarioId: text("usuario_id").references(() => user.id, {
 		onDelete: "set null",

@@ -17,6 +17,7 @@ import {
 	calcEnvasadoPct,
 	calcPncPct,
 	calcPncTotalKg,
+	calcPncTotalKgFromSums,
 	describeFormulas,
 	PNC_KG_POR_BATCH,
 } from "../lib/formulas";
@@ -49,16 +50,14 @@ export async function upsertElaboracion(
 	userId: string | null,
 ) {
 	const cfg = await catalogos.getConfigMap();
+	// El indicador se DERIVA en lectura; aquí sólo se calcula para la respuesta
+	// inmediata (no se persiste).
 	const elaboracionPct = calcElaboracionPct(
 		input.batchReal,
 		input.batchProg,
 		cfg.decimales_pct ?? 1,
 	);
-	const id = await registros.upsertElaboracion({
-		...input,
-		elaboracionPct,
-		userId,
-	});
+	const id = await registros.upsertElaboracion({ ...input, userId });
 	return { id, elaboracionPct };
 }
 
@@ -68,14 +67,14 @@ export async function upsertEnvasado(
 ) {
 	const cfg = await catalogos.getConfigMap();
 	const envasadoPct = calcEnvasadoPct(input.envasado, cfg.decimales_pct ?? 1);
-	const id = await registros.upsertEnvasado({ ...input, envasadoPct, userId });
+	const id = await registros.upsertEnvasado({ ...input, userId });
 	return { id, envasadoPct };
 }
 
 export async function upsertPnc(input: UpsertPncDto, userId: string | null) {
 	const cfg = await catalogos.getConfigMap();
 	const pncTotalKg = calcPncTotalKg(input.pnc, cfg);
-	const id = await registros.upsertPnc({ ...input, pncTotalKg, userId });
+	const id = await registros.upsertPnc({ ...input, userId });
 	return { id, pncTotalKg };
 }
 
@@ -94,6 +93,8 @@ function calcular(input: RegistroDto, cfg: Record<string, number>) {
 
 export async function crear(input: RegistroDto, userId: string | null) {
 	const cfg = await catalogos.getConfigMap();
+	// `calc` es sólo para la respuesta inmediata; los indicadores no se persisten
+	// (se derivan en `listar`/export con la config vigente).
 	const calc = calcular(input, cfg);
 	const id = await registros.crearRegistro({
 		fecha: input.fecha,
@@ -101,7 +102,6 @@ export async function crear(input: RegistroDto, userId: string | null) {
 		operarioId: input.operarioId,
 		batchReal: input.batchReal,
 		batchProg: input.batchProg,
-		...calc,
 		envasado: input.envasado,
 		pnc: input.pnc,
 		detalle: `Turno ${input.turno} · ${input.fecha}`,
@@ -115,12 +115,70 @@ export async function listar(filtro: FiltroDto) {
 		registros.listRegistros(filtro),
 		catalogos.getConfigMap(),
 	]);
-	// % PNC = kg PNC ÷ (batch producido × PNC_KG_POR_BATCH) × 100 (RF-CALC).
-	// El coeficiente vive en código (lib/formulas), no en la DB: es fórmula, no dato.
+	// Política uniforme: los CUATRO indicadores se DERIVAN en lectura desde los
+	// datos crudos con la config vigente, nunca se leen de columnas congeladas.
+	// Así no divergen entre sí ni con el Excel cuando admin edita `config_formula`.
+	// El coeficiente PNC_KG_POR_BATCH vive en código (es fórmula, no dato).
 	const decimals = cfg.decimales_pct ?? 1;
+	return rows.map((r) => {
+		const elaboracionPct = calcElaboracionPct(
+			r.batchReal,
+			r.batchProg,
+			decimals,
+		);
+		const envasadoPct = calcEnvasadoPct(
+			[{ pedido: r.envasadoPedido, real: r.envasadoReal }],
+			decimals,
+		);
+		const pncTotalKg = calcPncTotalKgFromSums(
+			{
+				unidades: r.pncUnidades,
+				kilos: r.pncKilos,
+				bandejas: r.pncBandejas,
+				carros: r.pncCarros,
+			},
+			cfg,
+		);
+		const pncPct = calcPncPct(
+			pncTotalKg,
+			r.batchReal,
+			PNC_KG_POR_BATCH,
+			decimals,
+		);
+		return {
+			id: r.id,
+			fecha: r.fecha,
+			turno: r.turno,
+			operarioId: r.operarioId,
+			operario: r.operario,
+			batchReal: r.batchReal,
+			batchProg: r.batchProg,
+			envasadoPedido: r.envasadoPedido,
+			pncCount: r.pncCount,
+			createdAt: r.createdAt,
+			elaboracionPct,
+			envasadoPct,
+			pncTotalKg,
+			pncPct,
+		};
+	});
+}
+
+// RF-EXP: filas para el Excel. Reusa `listar` (misma query e indicadores
+// derivados que la UI) y proyecta sólo las columnas del reporte; el formateo a
+// .xlsx vive en apps/server (capa de transporte), no aquí.
+export async function exportar(filtro: FiltroDto) {
+	const rows = await listar(filtro);
 	return rows.map((r) => ({
-		...r,
-		pncPct: calcPncPct(r.pncTotalKg, r.batchReal, PNC_KG_POR_BATCH, decimals),
+		fecha: r.fecha,
+		turno: r.turno,
+		operario: r.operario,
+		batchReal: r.batchReal,
+		batchProg: r.batchProg,
+		elaboracionPct: r.elaboracionPct,
+		envasadoPct: r.envasadoPct,
+		pncTotalKg: r.pncTotalKg,
+		pncPct: r.pncPct,
 	}));
 }
 
@@ -147,7 +205,6 @@ export async function actualizar(
 		operarioId: input.operarioId,
 		batchReal: input.batchReal,
 		batchProg: input.batchProg,
-		...calc,
 		envasado: input.envasado,
 		pnc: input.pnc,
 		userId,

@@ -36,6 +36,9 @@ async function findOrCreateRegistroId(
 		.from(registro)
 		.where(and(eq(registro.fecha, args.fecha), eq(registro.turno, args.turno)));
 	if (existing) return existing.id;
+	// Carrera find-then-insert: si otro upsert concurrente insertó el mismo
+	// (fecha,turno) entre el SELECT y el INSERT, `onConflictDoNothing` evita el
+	// 500 por unique violation y devuelve vacío → re-SELECT para tomar el id ajeno.
 	const [created] = await tx
 		.insert(registro)
 		.values({
@@ -44,9 +47,15 @@ async function findOrCreateRegistroId(
 			operarioId: args.operarioId,
 			createdBy: args.userId,
 		})
+		.onConflictDoNothing({ target: [registro.fecha, registro.turno] })
 		.returning({ id: registro.id });
-	if (!created) throw new Error("No se pudo crear el registro");
-	return created.id;
+	if (created) return created.id;
+	const [racedRow] = await tx
+		.select({ id: registro.id })
+		.from(registro)
+		.where(and(eq(registro.fecha, args.fecha), eq(registro.turno, args.turno)));
+	if (!racedRow) throw new Error("No se pudo crear el registro");
+	return racedRow.id;
 }
 
 function isUniqueViolation(e: unknown): boolean {
@@ -97,10 +106,14 @@ export async function listRegistros(filtro: {
 
 	// Sub-agregados por registro: evitan el producto cartesiano que daría unir
 	// envasado_item y pnc_item a la vez (ambos 1:N) y corromper sumas/conteos.
+	// Traemos los datos CRUDOS necesarios (Σ pedido/real de envasado; Σ de cada
+	// componente de PNC); los indicadores se derivan en el service con la config
+	// vigente, no se leen de columnas persistidas.
 	const envasadoAgg = db
 		.select({
 			registroId: envasadoItem.registroId,
 			pedido: sum(envasadoItem.pedido).as("pedido"),
+			real: sum(envasadoItem.real).as("real"),
 		})
 		.from(envasadoItem)
 		.groupBy(envasadoItem.registroId)
@@ -109,6 +122,10 @@ export async function listRegistros(filtro: {
 		.select({
 			registroId: pncItem.registroId,
 			items: count(pncItem.id).as("items"),
+			unidades: sum(pncItem.unidades).as("unidades"),
+			kilos: sum(pncItem.kilos).as("kilos"),
+			bandejas: sum(pncItem.bandejas).as("bandejas"),
+			carros: sum(pncItem.carros).as("carros"),
 		})
 		.from(pncItem)
 		.groupBy(pncItem.registroId)
@@ -123,11 +140,14 @@ export async function listRegistros(filtro: {
 			operario: operario.nombre,
 			batchReal: registro.batchReal,
 			batchProg: registro.batchProg,
-			elaboracionPct: registro.elaboracionPct,
-			// Programado de envasado = Σ pedido de los ítems del turno.
+			// Programado/real de envasado = Σ de los ítems del turno.
 			envasadoPedido: envasadoAgg.pedido,
-			envasadoPct: registro.envasadoPct,
-			pncTotalKg: registro.pncTotalKg,
+			envasadoReal: envasadoAgg.real,
+			// Componentes crudos de PNC para derivar kg con la config vigente.
+			pncUnidades: pncAgg.unidades,
+			pncKilos: pncAgg.kilos,
+			pncBandejas: pncAgg.bandejas,
+			pncCarros: pncAgg.carros,
 			// Nº de ítems PNC: distingue "0 kg ingresado" de "sin ingresar".
 			pncCount: pncAgg.items,
 			createdAt: registro.createdAt,
@@ -143,6 +163,11 @@ export async function listRegistros(filtro: {
 	return rows.map((r) => ({
 		...r,
 		envasadoPedido: Number(r.envasadoPedido ?? 0),
+		envasadoReal: Number(r.envasadoReal ?? 0),
+		pncUnidades: Number(r.pncUnidades ?? 0),
+		pncKilos: Number(r.pncKilos ?? 0),
+		pncBandejas: Number(r.pncBandejas ?? 0),
+		pncCarros: Number(r.pncCarros ?? 0),
 		pncCount: Number(r.pncCount ?? 0),
 	}));
 }
@@ -151,7 +176,6 @@ export function upsertElaboracion(
 	data: RegistroBase & {
 		batchReal: number;
 		batchProg: number;
-		elaboracionPct: number;
 	},
 ) {
 	return db.transaction(async (tx) => {
@@ -162,11 +186,11 @@ export function upsertElaboracion(
 				operarioId: data.operarioId,
 				batchReal: data.batchReal,
 				batchProg: data.batchProg,
-				elaboracionPct: data.elaboracionPct,
 			})
 			.where(eq(registro.id, regId));
 		await tx.insert(auditoria).values({
-			registroId: regId,
+			entidad: "registro",
+			entidadId: String(regId),
 			accion: "editar",
 			usuarioId: data.userId,
 			detalle: "Elaboración",
@@ -177,7 +201,6 @@ export function upsertElaboracion(
 
 export function upsertEnvasado(
 	data: RegistroBase & {
-		envasadoPct: number;
 		envasado: EnvasadoItemDto[];
 	},
 ) {
@@ -185,7 +208,7 @@ export function upsertEnvasado(
 		const regId = await findOrCreateRegistroId(tx, data);
 		await tx
 			.update(registro)
-			.set({ operarioId: data.operarioId, envasadoPct: data.envasadoPct })
+			.set({ operarioId: data.operarioId })
 			.where(eq(registro.id, regId));
 		await tx.delete(envasadoItem).where(eq(envasadoItem.registroId, regId));
 		if (data.envasado.length) {
@@ -194,7 +217,8 @@ export function upsertEnvasado(
 				.values(data.envasado.map((i) => ({ ...i, registroId: regId })));
 		}
 		await tx.insert(auditoria).values({
-			registroId: regId,
+			entidad: "registro",
+			entidadId: String(regId),
 			accion: "editar",
 			usuarioId: data.userId,
 			detalle: "Envasado",
@@ -205,7 +229,6 @@ export function upsertEnvasado(
 
 export function upsertPnc(
 	data: RegistroBase & {
-		pncTotalKg: number;
 		pnc: PncItemDto[];
 	},
 ) {
@@ -213,7 +236,7 @@ export function upsertPnc(
 		const regId = await findOrCreateRegistroId(tx, data);
 		await tx
 			.update(registro)
-			.set({ operarioId: data.operarioId, pncTotalKg: data.pncTotalKg })
+			.set({ operarioId: data.operarioId })
 			.where(eq(registro.id, regId));
 		await tx.delete(pncItem).where(eq(pncItem.registroId, regId));
 		if (data.pnc.length) {
@@ -222,7 +245,8 @@ export function upsertPnc(
 				.values(data.pnc.map((i) => ({ ...i, registroId: regId })));
 		}
 		await tx.insert(auditoria).values({
-			registroId: regId,
+			entidad: "registro",
+			entidadId: String(regId),
 			accion: "editar",
 			usuarioId: data.userId,
 			detalle: "PNC",
@@ -235,9 +259,6 @@ export async function crearRegistro(
 	data: RegistroBase & {
 		batchReal: number;
 		batchProg: number;
-		elaboracionPct: number;
-		envasadoPct: number;
-		pncTotalKg: number;
 		envasado: EnvasadoItemDto[];
 		pnc: PncItemDto[];
 		detalle: string;
@@ -253,9 +274,6 @@ export async function crearRegistro(
 					operarioId: data.operarioId,
 					batchReal: data.batchReal,
 					batchProg: data.batchProg,
-					elaboracionPct: data.elaboracionPct,
-					envasadoPct: data.envasadoPct,
-					pncTotalKg: data.pncTotalKg,
 					createdBy: data.userId,
 				})
 				.returning({ id: registro.id });
@@ -271,7 +289,8 @@ export async function crearRegistro(
 					.values(data.pnc.map((i) => ({ ...i, registroId: reg.id })));
 			}
 			await tx.insert(auditoria).values({
-				registroId: reg.id,
+				entidad: "registro",
+				entidadId: String(reg.id),
 				accion: "crear",
 				usuarioId: data.userId,
 				detalle: data.detalle,
@@ -286,61 +305,66 @@ export async function crearRegistro(
 	}
 }
 
-export function actualizarRegistro(data: {
+export async function actualizarRegistro(data: {
 	id: number;
 	fecha: string;
 	turno: Turno;
 	operarioId: number;
 	batchReal: number;
 	batchProg: number;
-	elaboracionPct: number;
-	envasadoPct: number;
-	pncTotalKg: number;
 	envasado: EnvasadoItemDto[];
 	pnc: PncItemDto[];
 	userId: string | null;
 }) {
-	return db.transaction(async (tx) => {
-		await tx
-			.update(registro)
-			.set({
-				fecha: data.fecha,
-				turno: data.turno,
-				operarioId: data.operarioId,
-				batchReal: data.batchReal,
-				batchProg: data.batchProg,
-				elaboracionPct: data.elaboracionPct,
-				envasadoPct: data.envasadoPct,
-				pncTotalKg: data.pncTotalKg,
-			})
-			.where(eq(registro.id, data.id));
-		await tx.delete(envasadoItem).where(eq(envasadoItem.registroId, data.id));
-		await tx.delete(pncItem).where(eq(pncItem.registroId, data.id));
-		if (data.envasado.length) {
+	try {
+		return await db.transaction(async (tx) => {
 			await tx
-				.insert(envasadoItem)
-				.values(data.envasado.map((i) => ({ ...i, registroId: data.id })));
-		}
-		if (data.pnc.length) {
-			await tx
-				.insert(pncItem)
-				.values(data.pnc.map((i) => ({ ...i, registroId: data.id })));
-		}
-		await tx.insert(auditoria).values({
-			registroId: data.id,
-			accion: "editar",
-			usuarioId: data.userId,
+				.update(registro)
+				.set({
+					fecha: data.fecha,
+					turno: data.turno,
+					operarioId: data.operarioId,
+					batchReal: data.batchReal,
+					batchProg: data.batchProg,
+				})
+				.where(eq(registro.id, data.id));
+			await tx.delete(envasadoItem).where(eq(envasadoItem.registroId, data.id));
+			await tx.delete(pncItem).where(eq(pncItem.registroId, data.id));
+			if (data.envasado.length) {
+				await tx
+					.insert(envasadoItem)
+					.values(data.envasado.map((i) => ({ ...i, registroId: data.id })));
+			}
+			if (data.pnc.length) {
+				await tx
+					.insert(pncItem)
+					.values(data.pnc.map((i) => ({ ...i, registroId: data.id })));
+			}
+			await tx.insert(auditoria).values({
+				entidad: "registro",
+				entidadId: String(data.id),
+				accion: "editar",
+				usuarioId: data.userId,
+			});
 		});
-	});
+	} catch (e) {
+		// Mismo manejo que crearRegistro: editar fecha/turno a una combinación ya
+		// existente viola el unique (fecha,turno) → ConflictError (409), no 500.
+		if (isUniqueViolation(e)) {
+			throw new ConflictError("Ya existe un registro para esa fecha y turno.");
+		}
+		throw e;
+	}
 }
 
 export async function eliminarRegistro(data: {
 	id: number;
 	userId: string | null;
 }) {
-	// Auditoría antes del delete: auditoria.registroId no tiene FK, queda como traza.
+	// Auditoría antes del delete: auditoria no tiene FK al registro, queda como traza.
 	await db.insert(auditoria).values({
-		registroId: data.id,
+		entidad: "registro",
+		entidadId: String(data.id),
 		accion: "borrar",
 		usuarioId: data.userId,
 	});

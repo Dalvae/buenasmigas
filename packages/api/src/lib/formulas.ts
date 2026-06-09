@@ -56,6 +56,22 @@ export function calcPncTotalKg(
 	return round(total, decimals);
 }
 
+// Igual que calcPncTotalKg pero a partir de los Σ ya agregados (un solo ítem
+// virtual). Lo usa la lectura (`listar`), que trae las sumas crudas desde la DB
+// y deriva el total con la config vigente en vez de leer una columna congelada.
+export function calcPncTotalKgFromSums(
+	sums: {
+		unidades: number;
+		kilos: number;
+		bandejas: number;
+		carros: number;
+	},
+	config: ConfigMap,
+	decimals = 2,
+): number {
+	return calcPncTotalKg([sums], config, decimals);
+}
+
 // Kg producidos por batch — base (denominador) del % PNC. Es un COEFICIENTE de la
 // fórmula, NO un dato editable: vive en código, no en config_formula/DB.
 // % PNC = kg PNC del turno ÷ (nº de batches producidos × 108). Valor de calidad.

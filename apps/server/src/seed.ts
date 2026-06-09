@@ -173,17 +173,17 @@ async function main() {
 		.from(user)
 		.where(eq(user.email, env.ADMIN_EMAIL));
 	if (adminExistente.length === 0) {
-		await auth.api.signUpEmail({
+		// Alta vía el plugin admin (crea + asigna rol en un paso). Es el camino
+		// server-side que ignora `disableSignUp` (signup público cerrado); sin
+		// headers corre con privilegio interno.
+		await auth.api.createUser({
 			body: {
 				email: env.ADMIN_EMAIL,
 				password: env.ADMIN_PASSWORD,
 				name: env.ADMIN_NAME,
+				role: "admin",
 			},
 		});
-		await db
-			.update(user)
-			.set({ role: "admin" })
-			.where(eq(user.email, env.ADMIN_EMAIL));
 		console.log(`  ✓ admin: ${env.ADMIN_EMAIL}`);
 	} else {
 		console.log(`  · admin ya existe: ${env.ADMIN_EMAIL}`);

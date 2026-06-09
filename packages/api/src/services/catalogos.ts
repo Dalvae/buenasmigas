@@ -8,34 +8,40 @@ import * as catalogos from "../repositories/catalogos";
 export function listOperarios() {
 	return catalogos.listOperarios();
 }
-export function crearOperario(nombre: string) {
-	return catalogos.createOperario(nombre);
+export function crearOperario(nombre: string, actorUserId: string | null) {
+	return catalogos.createOperario(nombre, actorUserId);
 }
 export function actualizarOperario(
 	id: number,
 	patch: { nombre?: string; activo?: boolean },
+	actorUserId: string | null,
 ) {
-	return catalogos.updateOperario(id, patch);
+	return catalogos.updateOperario(id, patch, actorUserId);
 }
 
 // --- Tipos de envasado ---
 export function listTipos() {
 	return catalogos.listTipos();
 }
-export function crearTipo(nombre: string) {
-	return catalogos.createTipo(nombre);
+export function crearTipo(nombre: string, actorUserId: string | null) {
+	return catalogos.createTipo(nombre, actorUserId);
 }
 export function actualizarTipo(
 	id: number,
 	patch: { nombre?: string; activo?: boolean },
+	actorUserId: string | null,
 ) {
-	return catalogos.updateTipo(id, patch);
+	return catalogos.updateTipo(id, patch, actorUserId);
 }
 
 // --- Parámetros de fórmula ---
 export function listConfig() {
 	return catalogos.listConfig();
 }
-export function actualizarConfig(clave: string, valor: number) {
-	return catalogos.updateConfig(clave, valor);
+export function actualizarConfig(
+	clave: string,
+	valor: number,
+	actorUserId: string | null,
+) {
+	return catalogos.updateConfig(clave, valor, actorUserId);
 }

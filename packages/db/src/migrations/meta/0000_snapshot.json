@@ -1,5 +1,5 @@
 {
-	"id": "20f5dec4-7bad-4330-bb9c-4336d2745727",
+	"id": "ac6a7d82-614d-42a3-98e6-7f6e8b2fde67",
 	"prevId": "00000000-0000-0000-0000-000000000000",
 	"version": "7",
 	"dialect": "postgresql",
@@ -14,9 +14,15 @@
 					"primaryKey": true,
 					"notNull": true
 				},
-				"registro_id": {
-					"name": "registro_id",
-					"type": "integer",
+				"entidad": {
+					"name": "entidad",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": true
+				},
+				"entidad_id": {
+					"name": "entidad_id",
+					"type": "text",
 					"primaryKey": false,
 					"notNull": false
 				},
@@ -350,27 +356,6 @@
 					"notNull": true,
 					"default": 0
 				},
-				"elaboracion_pct": {
-					"name": "elaboracion_pct",
-					"type": "double precision",
-					"primaryKey": false,
-					"notNull": true,
-					"default": 0
-				},
-				"envasado_pct": {
-					"name": "envasado_pct",
-					"type": "double precision",
-					"primaryKey": false,
-					"notNull": true,
-					"default": 0
-				},
-				"pnc_total_kg": {
-					"name": "pnc_total_kg",
-					"type": "double precision",
-					"primaryKey": false,
-					"notNull": true,
-					"default": 0
-				},
 				"created_by": {
 					"name": "created_by",
 					"type": "text",
@@ -684,7 +669,8 @@
 					"name": "updated_at",
 					"type": "timestamp",
 					"primaryKey": false,
-					"notNull": true
+					"notNull": true,
+					"default": "now()"
 				},
 				"ip_address": {
 					"name": "ip_address",

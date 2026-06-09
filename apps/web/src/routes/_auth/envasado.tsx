@@ -176,14 +176,18 @@ function RouteComponent() {
 						<CardTitle className="font-display">Envasado</CardTitle>
 					</CardHeader>
 					<CardContent className="space-y-4">
-						<div className="space-y-2">
+						<div className="space-y-3 sm:space-y-2">
 							{filas.map((fila, i) => (
 								<div
 									key={i}
-									className="grid grid-cols-[1fr_auto_auto_auto] items-end gap-2"
+									className="grid grid-cols-2 items-end gap-x-2 gap-y-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-[1fr_6rem_6rem_auto] sm:gap-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0"
 								>
-									<div className="space-y-1">
-										{i === 0 ? <Label className="text-xs">Tipo</Label> : null}
+									<div className="col-span-2 space-y-1 sm:col-span-1">
+										<Label
+											className={i === 0 ? "text-xs" : "text-xs sm:sr-only"}
+										>
+											Tipo
+										</Label>
 										<select
 											className={selectClass}
 											value={fila.tipoEnvasadoId}
@@ -200,12 +204,16 @@ function RouteComponent() {
 										</select>
 									</div>
 									<div className="space-y-1">
-										{i === 0 ? <Label className="text-xs">Pedido</Label> : null}
+										<Label
+											className={i === 0 ? "text-xs" : "text-xs sm:sr-only"}
+										>
+											Pedido
+										</Label>
 										<Input
 											type="number"
 											min={0}
 											step={1}
-											className="w-24 rounded-md"
+											className="w-full rounded-md"
 											value={fila.pedido}
 											onChange={(e) =>
 												updateFila(i, { pedido: e.target.value })
@@ -213,12 +221,16 @@ function RouteComponent() {
 										/>
 									</div>
 									<div className="space-y-1">
-										{i === 0 ? <Label className="text-xs">Real</Label> : null}
+										<Label
+											className={i === 0 ? "text-xs" : "text-xs sm:sr-only"}
+										>
+											Real
+										</Label>
 										<Input
 											type="number"
 											min={0}
 											step={1}
-											className="w-24 rounded-md"
+											className="w-full rounded-md"
 											value={fila.real}
 											onChange={(e) => updateFila(i, { real: e.target.value })}
 										/>
@@ -230,6 +242,7 @@ function RouteComponent() {
 										onClick={() =>
 											setFilas((rows) => rows.filter((_, idx) => idx !== i))
 										}
+										className="col-span-2 w-full sm:col-span-1 sm:w-auto"
 									>
 										Quitar
 									</Button>

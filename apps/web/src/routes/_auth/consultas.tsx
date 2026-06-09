@@ -7,13 +7,20 @@ import {
 	CardTitle,
 } from "@buenasmigas/ui/components/card";
 import { Label } from "@buenasmigas/ui/components/label";
+import {
+	Tooltip as InfoTip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@buenasmigas/ui/components/tooltip";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { Info } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import {
 	Bar,
-	BarChart,
 	CartesianGrid,
+	ComposedChart,
+	Legend,
 	Line,
 	LineChart,
 	ResponsiveContainer,
@@ -47,6 +54,33 @@ function ultimoDiaMes(): string {
 	);
 }
 
+// Título de tarjeta con un ícono de ayuda que muestra la fórmula del indicador.
+// La definición llega del backend (endpoint `opciones`), no se hardcodea acá.
+function TituloFormula({
+	titulo,
+	formula,
+}: {
+	titulo: string;
+	formula: ReactNode;
+}) {
+	return (
+		<CardTitle className="flex items-center gap-1.5">
+			{titulo}
+			{formula ? (
+				<InfoTip>
+					<TooltipTrigger
+						aria-label={`Fórmula de ${titulo}`}
+						className="inline-flex cursor-help text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
+					>
+						<Info className="size-4" />
+					</TooltipTrigger>
+					<TooltipContent>{formula}</TooltipContent>
+				</InfoTip>
+			) : null}
+		</CardTitle>
+	);
+}
+
 function RouteComponent() {
 	const [desde, setDesde] = useState(primerDiaMes());
 	const [hasta, setHasta] = useState(ultimoDiaMes());
@@ -56,6 +90,7 @@ function RouteComponent() {
 
 	const opciones = useQuery(orpc.registros.opciones.queryOptions());
 	const operarios = opciones.data?.operarios ?? [];
+	const formulas = opciones.data?.formulas;
 
 	const registros = useQuery(
 		orpc.registros.listar.queryOptions({
@@ -69,11 +104,15 @@ function RouteComponent() {
 	);
 
 	const filas = registros.data ?? [];
+	// Un módulo no ingresado vale 0 en la BD; lo mostramos como null para que el
+	// gráfico deje un hueco en vez de dibujar un cero engañoso.
 	const chartData = filas.map((r) => ({
 		fecha: r.fecha,
-		elaboracionPct: r.elaboracionPct,
-		envasadoPct: r.envasadoPct,
-		pncTotalKg: r.pncTotalKg,
+		elaboracionPct: r.batchProg > 0 ? r.elaboracionPct : null,
+		envasadoPct: r.envasadoPedido > 0 ? r.envasadoPct : null,
+		pncTotalKg: r.pncCount > 0 ? r.pncTotalKg : null,
+		// El % necesita producción base (batch producido); si no hay, deja hueco.
+		pncPct: r.pncCount > 0 && r.batchReal > 0 ? r.pncPct : null,
 	}));
 
 	async function exportarExcel() {
@@ -219,10 +258,14 @@ function RouteComponent() {
 											<td className="px-2 py-2">{r.turno}</td>
 											<td className="px-2 py-2">{r.operario}</td>
 											<td className="px-2 py-2 text-right">
-												{r.elaboracionPct}%
+												{r.batchProg > 0 ? `${r.elaboracionPct}%` : "—"}
 											</td>
-											<td className="px-2 py-2 text-right">{r.envasadoPct}%</td>
-											<td className="px-2 py-2 text-right">{r.pncTotalKg}</td>
+											<td className="px-2 py-2 text-right">
+												{r.envasadoPedido > 0 ? `${r.envasadoPct}%` : "—"}
+											</td>
+											<td className="px-2 py-2 text-right">
+												{r.pncCount > 0 ? r.pncTotalKg : "—"}
+											</td>
 										</tr>
 									))
 								)}
@@ -235,7 +278,10 @@ function RouteComponent() {
 			<div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
 				<Card>
 					<CardHeader>
-						<CardTitle>% Elaboración</CardTitle>
+						<TituloFormula
+							titulo="% Elaboración"
+							formula={formulas?.elaboracion}
+						/>
 					</CardHeader>
 					<CardContent>
 						<ResponsiveContainer width="100%" height={240}>
@@ -257,7 +303,7 @@ function RouteComponent() {
 
 				<Card>
 					<CardHeader>
-						<CardTitle>% Envasado</CardTitle>
+						<TituloFormula titulo="% Envasado" formula={formulas?.envasado} />
 					</CardHeader>
 					<CardContent>
 						<ResponsiveContainer width="100%" height={240}>
@@ -279,17 +325,51 @@ function RouteComponent() {
 
 				<Card className="lg:col-span-2">
 					<CardHeader>
-						<CardTitle>kg PNC</CardTitle>
+						<TituloFormula
+							titulo="PNC (kg y %)"
+							formula={
+								formulas ? (
+									<>
+										<p>{formulas.pncKg}</p>
+										<p className="mt-1.5">{formulas.pncPct}</p>
+									</>
+								) : null
+							}
+						/>
 					</CardHeader>
 					<CardContent>
 						<ResponsiveContainer width="100%" height={240}>
-							<BarChart data={chartData}>
+							<ComposedChart data={chartData}>
 								<CartesianGrid strokeDasharray="3 3" />
 								<XAxis dataKey="fecha" />
-								<YAxis />
+								<YAxis
+									yAxisId="kg"
+									orientation="left"
+									tickFormatter={(v) => `${v} kg`}
+								/>
+								<YAxis
+									yAxisId="pct"
+									orientation="right"
+									tickFormatter={(v) => `${v}%`}
+								/>
 								<Tooltip />
-								<Bar dataKey="pncTotalKg" fill="#d97706" name="kg PNC" />
-							</BarChart>
+								<Legend />
+								<Bar
+									yAxisId="kg"
+									dataKey="pncTotalKg"
+									fill="#d97706"
+									name="kg PNC"
+									unit=" kg"
+								/>
+								<Line
+									yAxisId="pct"
+									type="monotone"
+									dataKey="pncPct"
+									stroke="#dc2626"
+									name="% PNC"
+									unit="%"
+								/>
+							</ComposedChart>
 						</ResponsiveContainer>
 					</CardContent>
 				</Card>

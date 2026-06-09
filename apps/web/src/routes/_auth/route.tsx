@@ -1,11 +1,20 @@
 import { Button } from "@buenasmigas/ui/components/button";
 import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuLabel,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@buenasmigas/ui/components/dropdown-menu";
+import {
 	createFileRoute,
 	Link,
 	Outlet,
 	redirect,
 	useNavigate,
 } from "@tanstack/react-router";
+import { LogOut, Menu } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
 import { clearToken } from "@/lib/token";
@@ -48,11 +57,11 @@ function AuthLayout() {
 				<div className="flex items-center gap-6">
 					<Link
 						to="/dashboard"
-						className="font-bold font-display text-primary text-xl tracking-tight"
+						className="font-bold font-display text-lg text-primary tracking-tight sm:text-xl"
 					>
 						Buenas Migas
 					</Link>
-					<nav className="flex items-center gap-1 text-sm">
+					<nav className="hidden items-center gap-1 text-sm sm:flex">
 						{links.map(({ to, label }) => (
 							<Link key={to} to={to} className={linkClass}>
 								{label}
@@ -65,19 +74,82 @@ function AuthLayout() {
 						) : null}
 					</nav>
 				</div>
-				<div className="flex items-center gap-3">
-					<span className="text-muted-foreground text-sm">
-						{session?.user?.name}
-					</span>
+
+				{/* Acciones de escritorio */}
+				<div className="hidden items-center gap-3 sm:flex">
+					<div className="flex items-center gap-2.5">
+						<span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary font-display font-semibold text-primary-foreground text-sm">
+							{session?.user?.name?.charAt(0).toUpperCase() ?? "?"}
+						</span>
+						<div className="flex flex-col leading-tight">
+							<span className="font-medium text-foreground text-sm">
+								{session?.user?.name}
+							</span>
+							<span className="text-muted-foreground text-xs">
+								{role === "admin" ? "Administrador" : "Operario"}
+							</span>
+						</div>
+					</div>
 					<Button
 						variant="outline"
 						size="sm"
-						className="rounded-md"
+						className="gap-1.5 rounded-md"
 						onClick={handleLogout}
 					>
+						<LogOut className="size-4" />
 						Salir
 					</Button>
 				</div>
+
+				{/* Menú móvil */}
+				<DropdownMenu>
+					<DropdownMenuTrigger
+						render={
+							<Button
+								variant="outline"
+								size="icon"
+								aria-label="Abrir menú"
+								className="rounded-md sm:hidden"
+							>
+								<Menu className="size-5" />
+							</Button>
+						}
+					/>
+					<DropdownMenuContent align="end" className="w-48 rounded-md">
+						{session?.user?.name ? (
+							<DropdownMenuLabel className="font-medium text-foreground text-sm">
+								{session.user.name}
+							</DropdownMenuLabel>
+						) : null}
+						<DropdownMenuSeparator />
+						{links.map(({ to, label }) => (
+							<DropdownMenuItem
+								key={to}
+								className="text-sm"
+								onClick={() => navigate({ to })}
+							>
+								{label}
+							</DropdownMenuItem>
+						))}
+						{role === "admin" ? (
+							<DropdownMenuItem
+								className="text-sm"
+								onClick={() => navigate({ to: "/admin" })}
+							>
+								Admin
+							</DropdownMenuItem>
+						) : null}
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							variant="destructive"
+							className="text-sm"
+							onClick={handleLogout}
+						>
+							<LogOut className="size-4" />
+							Salir
+						</DropdownMenuItem>
+					</DropdownMenuContent>
+				</DropdownMenu>
 			</header>
 			<main className="flex-1 overflow-auto">
 				<Outlet />

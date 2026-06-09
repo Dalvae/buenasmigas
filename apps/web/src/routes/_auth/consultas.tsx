@@ -7,6 +7,7 @@ import {
 	CardTitle,
 } from "@buenasmigas/ui/components/card";
 import { Label } from "@buenasmigas/ui/components/label";
+import { Select } from "@buenasmigas/ui/components/select";
 import {
 	Tooltip as InfoTip,
 	TooltipContent,
@@ -30,6 +31,7 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 
+import { primerDiaMes, ultimoDiaMes } from "@/lib/fechas";
 import { getToken } from "@/lib/token";
 import { orpc } from "@/utils/orpc";
 
@@ -37,22 +39,9 @@ export const Route = createFileRoute("/_auth/consultas")({
 	component: RouteComponent,
 });
 
-const selectClass =
-	"h-8 w-full min-w-0 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
-
+// Inputs nativos (date) en densidad compacta, alineada con el Select compacto.
 const inputClass =
 	"h-8 w-full min-w-0 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
-
-function primerDiaMes(): string {
-	const d = new Date();
-	return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString("en-CA");
-}
-function ultimoDiaMes(): string {
-	const d = new Date();
-	return new Date(d.getFullYear(), d.getMonth() + 1, 0).toLocaleDateString(
-		"en-CA",
-	);
-}
 
 // Título de tarjeta con un ícono de ayuda que muestra la fórmula del indicador.
 // La definición llega del backend (endpoint `opciones`), no se hardcodea acá.
@@ -84,7 +73,7 @@ function TituloFormula({
 function RouteComponent() {
 	const [desde, setDesde] = useState(primerDiaMes());
 	const [hasta, setHasta] = useState(ultimoDiaMes());
-	const [turno, setTurno] = useState("");
+	const [turno, setTurno] = useState<"" | "1" | "2" | "3">("");
 	const [operarioId, setOperarioId] = useState("");
 	const [exportando, setExportando] = useState(false);
 
@@ -97,7 +86,7 @@ function RouteComponent() {
 			input: {
 				desde,
 				hasta,
-				turno: turno ? (turno as "1" | "2" | "3") : undefined,
+				turno: turno || undefined,
 				operarioId: operarioId ? Number(operarioId) : undefined,
 			},
 		}),
@@ -177,23 +166,23 @@ function RouteComponent() {
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="turno">Turno</Label>
-						<select
+						<Select
 							id="turno"
-							className={selectClass}
+							size="compact"
 							value={turno}
-							onChange={(e) => setTurno(e.target.value)}
+							onChange={(e) => setTurno(e.target.value as "" | "1" | "2" | "3")}
 						>
 							<option value="">Todos</option>
 							<option value="1">Turno 1</option>
 							<option value="2">Turno 2</option>
 							<option value="3">Turno 3</option>
-						</select>
+						</Select>
 					</div>
 					<div className="space-y-2">
 						<Label htmlFor="operario">Operario</Label>
-						<select
+						<Select
 							id="operario"
-							className={selectClass}
+							size="compact"
 							value={operarioId}
 							onChange={(e) => setOperarioId(e.target.value)}
 						>
@@ -203,7 +192,7 @@ function RouteComponent() {
 									{o.nombre}
 								</option>
 							))}
-						</select>
+						</Select>
 					</div>
 					<div className="flex items-end">
 						<Button

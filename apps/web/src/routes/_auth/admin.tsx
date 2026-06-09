@@ -7,6 +7,7 @@ import {
 } from "@buenasmigas/ui/components/card";
 import { Input } from "@buenasmigas/ui/components/input";
 import { Label } from "@buenasmigas/ui/components/label";
+import { Select } from "@buenasmigas/ui/components/select";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
@@ -19,8 +20,29 @@ export const Route = createFileRoute("/_auth/admin")({
 	component: RouteComponent,
 });
 
-const selectClass =
-	"h-8 min-w-0 rounded-none border border-input bg-transparent px-2.5 py-1 text-xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-ring/50 disabled:opacity-50 dark:bg-input/30";
+// Invalidaciones acotadas por catálogo. Operarios y tipos también alimentan los
+// dropdowns de captura/consultas (endpoint `opciones`), así que se refrescan.
+function invalidarOperarios() {
+	queryClient.invalidateQueries({ queryKey: orpc.admin.operarios.key() });
+	queryClient.invalidateQueries({ queryKey: orpc.registros.opciones.key() });
+}
+function invalidarTipos() {
+	queryClient.invalidateQueries({ queryKey: orpc.admin.tipos.key() });
+	queryClient.invalidateQueries({ queryKey: orpc.registros.opciones.key() });
+}
+// Config: el catálogo, `opciones` (los tooltips de fórmula derivan de ella) y los
+// registros (sus indicadores se recalculan con los parámetros de fórmula).
+function invalidarConfig() {
+	queryClient.invalidateQueries({ queryKey: orpc.admin.config.key() });
+	queryClient.invalidateQueries({ queryKey: orpc.registros.opciones.key() });
+	queryClient.invalidateQueries({ queryKey: orpc.registros.listar.key() });
+	queryClient.invalidateQueries({
+		queryKey: orpc.registros.porFechaTurno.key(),
+	});
+}
+function invalidarUsuarios() {
+	queryClient.invalidateQueries({ queryKey: orpc.admin.usuarios.key() });
+}
 
 function RouteComponent() {
 	const navigate = useNavigate();
@@ -58,7 +80,7 @@ function OperariosSection() {
 			onSuccess: () => {
 				toast.success("Operario agregado");
 				setNombre("");
-				queryClient.invalidateQueries();
+				invalidarOperarios();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo agregar"),
 		}),
@@ -67,7 +89,7 @@ function OperariosSection() {
 		orpc.admin.actualizarOperario.mutationOptions({
 			onSuccess: () => {
 				toast.success("Operario actualizado");
-				queryClient.invalidateQueries();
+				invalidarOperarios();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo actualizar"),
 		}),
@@ -139,7 +161,7 @@ function TiposSection() {
 			onSuccess: () => {
 				toast.success("Tipo agregado");
 				setNombre("");
-				queryClient.invalidateQueries();
+				invalidarTipos();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo agregar"),
 		}),
@@ -148,7 +170,7 @@ function TiposSection() {
 		orpc.admin.actualizarTipo.mutationOptions({
 			onSuccess: () => {
 				toast.success("Tipo actualizado");
-				queryClient.invalidateQueries();
+				invalidarTipos();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo actualizar"),
 		}),
@@ -219,7 +241,7 @@ function ConfigSection() {
 		orpc.admin.actualizarConfig.mutationOptions({
 			onSuccess: () => {
 				toast.success("Parámetro actualizado");
-				queryClient.invalidateQueries();
+				invalidarConfig();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo actualizar"),
 		}),
@@ -289,7 +311,7 @@ function UsuariosSection() {
 			onSuccess: () => {
 				toast.success("Usuario creado");
 				setForm({ name: "", email: "", password: "", role: "operario" });
-				queryClient.invalidateQueries();
+				invalidarUsuarios();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo crear el usuario"),
 		}),
@@ -298,7 +320,7 @@ function UsuariosSection() {
 		orpc.admin.cambiarRol.mutationOptions({
 			onSuccess: () => {
 				toast.success("Rol actualizado");
-				queryClient.invalidateQueries();
+				invalidarUsuarios();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo cambiar el rol"),
 		}),
@@ -307,7 +329,7 @@ function UsuariosSection() {
 		orpc.admin.resetPassword.mutationOptions({
 			onSuccess: () => {
 				toast.success("Clave reseteada");
-				queryClient.invalidateQueries();
+				invalidarUsuarios();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo resetear la clave"),
 		}),
@@ -316,7 +338,7 @@ function UsuariosSection() {
 		orpc.admin.eliminarUsuario.mutationOptions({
 			onSuccess: () => {
 				toast.success("Usuario eliminado");
-				queryClient.invalidateQueries();
+				invalidarUsuarios();
 			},
 			onError: (e) => toast.error(e.message || "No se pudo eliminar"),
 		}),
@@ -367,9 +389,9 @@ function UsuariosSection() {
 					</div>
 					<div className="space-y-1">
 						<Label htmlFor="u-role">Rol</Label>
-						<select
+						<Select
 							id="u-role"
-							className={`${selectClass} w-full`}
+							size="compact"
 							value={form.role}
 							onChange={(e) =>
 								setForm((f) => ({
@@ -380,7 +402,7 @@ function UsuariosSection() {
 						>
 							<option value="operario">Operario</option>
 							<option value="admin">Admin</option>
-						</select>
+						</Select>
 					</div>
 					<Button type="submit" disabled={crear.isPending}>
 						Crear
@@ -404,8 +426,9 @@ function UsuariosSection() {
 									<td className="px-2 py-2">{u.name}</td>
 									<td className="px-2 py-2">{u.email}</td>
 									<td className="px-2 py-2">
-										<select
-											className={selectClass}
+										<Select
+											size="compact"
+											className="w-auto"
 											value={u.role ?? "operario"}
 											onChange={(e) =>
 												cambiarRol.mutate({
@@ -416,7 +439,7 @@ function UsuariosSection() {
 										>
 											<option value="operario">Operario</option>
 											<option value="admin">Admin</option>
-										</select>
+										</Select>
 									</td>
 									<td className="px-2 py-2">
 										<div className="flex items-center gap-2">

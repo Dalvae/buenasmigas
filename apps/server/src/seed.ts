@@ -29,13 +29,19 @@ const TIPOS_ENVASADO = [
 const CONFIG = [
 	{
 		clave: "pnc_peso_unitario_kg",
-		valor: 0.05,
+		valor: 0.055,
 		descripcion: "Kg por unidad para el total PNC (RF-CALC-03)",
 	},
 	{
 		clave: "pnc_peso_bandeja_kg",
-		valor: 2.0,
-		descripcion: "Kg por bandeja para el total PNC (RF-CALC-03)",
+		valor: 1.925, // 35 unidades × 0,055
+		descripcion:
+			"Kg por bandeja (35 un × 0,055) para el total PNC (RF-CALC-03)",
+	},
+	{
+		clave: "pnc_peso_carro_kg",
+		valor: 36.575, // 665 unidades × 0,055
+		descripcion: "Kg por carro (665 un × 0,055) para el total PNC (RF-CALC-03)",
 	},
 	{
 		clave: "decimales_pct",

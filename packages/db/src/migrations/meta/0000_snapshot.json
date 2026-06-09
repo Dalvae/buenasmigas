@@ -1,5 +1,5 @@
 {
-	"id": "81f8a560-bb92-4760-ad09-ec26cba71a6e",
+	"id": "20f5dec4-7bad-4330-bb9c-4336d2745727",
 	"prevId": "00000000-0000-0000-0000-000000000000",
 	"version": "7",
 	"dialect": "postgresql",
@@ -260,6 +260,13 @@
 				},
 				"bandejas": {
 					"name": "bandejas",
+					"type": "double precision",
+					"primaryKey": false,
+					"notNull": true,
+					"default": 0
+				},
+				"carros": {
+					"name": "carros",
 					"type": "double precision",
 					"primaryKey": false,
 					"notNull": true,

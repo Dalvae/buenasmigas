@@ -1,166 +1,77 @@
-import { auth } from "@buenasmigas/auth";
-import {
-	configFormula,
-	db,
-	operario,
-	tipoEnvasado,
-	user,
-} from "@buenasmigas/db";
+// Router de administración: capa de transporte (oRPC). DTO + tier admin +
+// delega en los services. Convierte headers de Node a Web (adaptación de
+// transporte) antes de pasarlos al service. No toca Drizzle ni Better Auth.
+
 import { fromNodeHeaders } from "better-auth/node";
-import { asc, eq } from "drizzle-orm";
-import { z } from "zod";
 
+import {
+	actualizarConfigDto,
+	actualizarOperarioDto,
+	actualizarTipoDto,
+	cambiarRolDto,
+	crearOperarioDto,
+	crearTipoDto,
+	crearUsuarioDto,
+	eliminarUsuarioDto,
+	resetPasswordDto,
+} from "../dto/admin";
 import { adminProcedure } from "../index";
-
-const rolSchema = z.enum(["operario", "admin"]);
+import * as catalogos from "../services/catalogos";
+import * as usuarios from "../services/usuarios";
 
 export const adminRouter = {
 	// --- Operarios (RF-ADM-01) ---
-	operarios: adminProcedure.handler(() =>
-		db.select().from(operario).orderBy(asc(operario.nombre)),
-	),
+	operarios: adminProcedure.handler(() => catalogos.listOperarios()),
 	crearOperario: adminProcedure
-		.input(z.object({ nombre: z.string().min(1) }))
-		.handler(async ({ input }) => {
-			const [row] = await db
-				.insert(operario)
-				.values({ nombre: input.nombre })
-				.returning();
-			return row;
-		}),
+		.input(crearOperarioDto)
+		.handler(({ input }) => catalogos.crearOperario(input.nombre)),
 	actualizarOperario: adminProcedure
-		.input(
-			z.object({
-				id: z.number().int(),
-				nombre: z.string().min(1).optional(),
-				activo: z.boolean().optional(),
-			}),
-		)
-		.handler(async ({ input }) => {
-			const { id, ...rest } = input;
-			const [row] = await db
-				.update(operario)
-				.set(rest)
-				.where(eq(operario.id, id))
-				.returning();
-			return row;
+		.input(actualizarOperarioDto)
+		.handler(({ input }) => {
+			const { id, ...patch } = input;
+			return catalogos.actualizarOperario(id, patch);
 		}),
 
 	// --- Tipos de envasado (RF-ADM-02) ---
-	tipos: adminProcedure.handler(() =>
-		db.select().from(tipoEnvasado).orderBy(asc(tipoEnvasado.nombre)),
-	),
+	tipos: adminProcedure.handler(() => catalogos.listTipos()),
 	crearTipo: adminProcedure
-		.input(z.object({ nombre: z.string().min(1) }))
-		.handler(async ({ input }) => {
-			const [row] = await db
-				.insert(tipoEnvasado)
-				.values({ nombre: input.nombre })
-				.returning();
-			return row;
-		}),
+		.input(crearTipoDto)
+		.handler(({ input }) => catalogos.crearTipo(input.nombre)),
 	actualizarTipo: adminProcedure
-		.input(
-			z.object({
-				id: z.number().int(),
-				nombre: z.string().min(1).optional(),
-				activo: z.boolean().optional(),
-			}),
-		)
-		.handler(async ({ input }) => {
-			const { id, ...rest } = input;
-			const [row] = await db
-				.update(tipoEnvasado)
-				.set(rest)
-				.where(eq(tipoEnvasado.id, id))
-				.returning();
-			return row;
+		.input(actualizarTipoDto)
+		.handler(({ input }) => {
+			const { id, ...patch } = input;
+			return catalogos.actualizarTipo(id, patch);
 		}),
 
 	// --- Parámetros de fórmula (RF-ADM-03 / RF-CALC-04) ---
-	config: adminProcedure.handler(() =>
-		db.select().from(configFormula).orderBy(asc(configFormula.clave)),
-	),
+	config: adminProcedure.handler(() => catalogos.listConfig()),
 	actualizarConfig: adminProcedure
-		.input(z.object({ clave: z.string(), valor: z.number() }))
-		.handler(async ({ input }) => {
-			const [row] = await db
-				.update(configFormula)
-				.set({ valor: input.valor })
-				.where(eq(configFormula.clave, input.clave))
-				.returning();
-			return row;
-		}),
+		.input(actualizarConfigDto)
+		.handler(({ input }) =>
+			catalogos.actualizarConfig(input.clave, input.valor),
+		),
 
 	// --- Usuarios (RF-ADM-05) ---
-	usuarios: adminProcedure.handler(() =>
-		db
-			.select({
-				id: user.id,
-				name: user.name,
-				email: user.email,
-				role: user.role,
-				banned: user.banned,
-				createdAt: user.createdAt,
-			})
-			.from(user)
-			.orderBy(asc(user.email)),
-	),
+	usuarios: adminProcedure.handler(() => usuarios.listUsuarios()),
 	crearUsuario: adminProcedure
-		.input(
-			z.object({
-				name: z.string().min(1),
-				email: z.email(),
-				password: z.string().min(8),
-				role: rolSchema.default("operario"),
-			}),
-		)
-		.handler(async ({ input }) => {
-			// Crea el usuario vía Better Auth (rol por defecto "operario") y, si se
-			// pidió admin, eleva el rol directo en la BD. Evita el typing de roles del
-			// plugin admin (que asume "user"|"admin") y su validación en runtime.
-			await auth.api.signUpEmail({
-				body: {
-					name: input.name,
-					email: input.email,
-					password: input.password,
-				},
-			});
-			if (input.role === "admin") {
-				await db
-					.update(user)
-					.set({ role: "admin" })
-					.where(eq(user.email, input.email));
-			}
-			return { email: input.email, role: input.role };
-		}),
+		.input(crearUsuarioDto)
+		.handler(({ input }) => usuarios.crearUsuario(input)),
 	cambiarRol: adminProcedure
-		.input(z.object({ userId: z.string(), role: rolSchema }))
-		.handler(async ({ input }) => {
-			await db
-				.update(user)
-				.set({ role: input.role })
-				.where(eq(user.id, input.userId));
-			return { ok: true };
-		}),
-	// El admin resetea la clave sin conocer la anterior (las claves son hash,
-	// no se pueden "desencriptar"). Le entrega la nueva al usuario.
+		.input(cambiarRolDto)
+		.handler(({ input }) => usuarios.cambiarRol(input.userId, input.role)),
 	resetPassword: adminProcedure
-		.input(z.object({ userId: z.string(), newPassword: z.string().min(8) }))
-		.handler(async ({ input, context }) => {
-			await auth.api.setUserPassword({
-				body: { userId: input.userId, newPassword: input.newPassword },
-				headers: fromNodeHeaders(context.headers),
-			});
-			return { ok: true };
-		}),
+		.input(resetPasswordDto)
+		.handler(({ input, context }) =>
+			usuarios.resetPassword(
+				input.userId,
+				input.newPassword,
+				fromNodeHeaders(context.headers),
+			),
+		),
 	eliminarUsuario: adminProcedure
-		.input(z.object({ userId: z.string() }))
-		.handler(async ({ input, context }) => {
-			await auth.api.removeUser({
-				body: { userId: input.userId },
-				headers: fromNodeHeaders(context.headers),
-			});
-			return { ok: true };
-		}),
+		.input(eliminarUsuarioDto)
+		.handler(({ input, context }) =>
+			usuarios.eliminarUsuario(input.userId, fromNodeHeaders(context.headers)),
+		),
 };

@@ -113,6 +113,7 @@ export const pncItem = pgTable(
 		unidades: doublePrecision("unidades").notNull().default(0),
 		kilos: doublePrecision("kilos").notNull().default(0),
 		bandejas: doublePrecision("bandejas").notNull().default(0),
+		carros: doublePrecision("carros").notNull().default(0),
 	},
 	(t) => [index("pnc_item_registro_idx").on(t.registroId)],
 );

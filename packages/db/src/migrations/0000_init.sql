@@ -37,7 +37,8 @@ CREATE TABLE "pnc_item" (
 	"descripcion" text,
 	"unidades" double precision DEFAULT 0 NOT NULL,
 	"kilos" double precision DEFAULT 0 NOT NULL,
-	"bandejas" double precision DEFAULT 0 NOT NULL
+	"bandejas" double precision DEFAULT 0 NOT NULL,
+	"carros" double precision DEFAULT 0 NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "registro" (

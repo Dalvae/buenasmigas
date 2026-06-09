@@ -2,6 +2,7 @@ import { Button } from "@buenasmigas/ui/components/button";
 import {
 	DropdownMenu,
 	DropdownMenuContent,
+	DropdownMenuGroup,
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
@@ -117,9 +118,11 @@ function AuthLayout() {
 					/>
 					<DropdownMenuContent align="end" className="w-48 rounded-md">
 						{session?.user?.name ? (
-							<DropdownMenuLabel className="font-medium text-foreground text-sm">
-								{session.user.name}
-							</DropdownMenuLabel>
+							<DropdownMenuGroup>
+								<DropdownMenuLabel className="font-medium text-foreground text-sm">
+									{session.user.name}
+								</DropdownMenuLabel>
+							</DropdownMenuGroup>
 						) : null}
 						<DropdownMenuSeparator />
 						{links.map(({ to, label }) => (
